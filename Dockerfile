@@ -2,21 +2,20 @@
 FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git nodejs npm curl
+RUN apk add --no-cache git npm
 
 # Install templ
 RUN go install github.com/a-h/templ/cmd/templ@latest
-
-# Download Tailwind CSS standalone CLI
-RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
-    && chmod +x tailwindcss-linux-x64 \
-    && mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss
 
 WORKDIR /app
 
 # Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
+
+# Copy package.json for tailwind
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -25,7 +24,7 @@ COPY . .
 RUN templ generate
 
 # Build Tailwind CSS
-RUN tailwindcss -i ./static/css/input.css -o ./static/css/app.css --minify
+RUN npx tailwindcss -i ./static/css/input.css -o ./static/css/app.css --minify
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ohabits ./cmd/server
