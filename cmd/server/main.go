@@ -100,6 +100,15 @@ func main() {
 	protected.POST("/workouts/reorder", h.ReorderWorkouts)
 	protected.POST("/workout-log", h.SaveWorkoutLog)
 
+	// Profile
+	protected.GET("/profile", h.ProfilePage)
+	protected.POST("/profile/info", h.UpdateProfileInfo)
+	protected.POST("/profile/password", h.UpdateProfilePassword)
+	protected.POST("/profile/avatar", h.UpdateProfileAvatar)
+
+	// Blog
+	protected.GET("/blog", h.BlogPage)
+
 	// Start server
 	go func() {
 		addr := ":" + cfg.Port

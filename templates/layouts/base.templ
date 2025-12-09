@@ -7,8 +7,28 @@ templ Base(title string, user *database.User) {
 	<html lang="ar" dir="rtl">
 	<head>
 		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 		<title>{ title } - ohabits</title>
+
+		<!-- PWA Meta Tags -->
+		<meta name="description" content="تطبيق لتتبع العادات اليومية والأدوية والتمارين والمزاج"/>
+		<meta name="theme-color" content="#F97316"/>
+		<meta name="apple-mobile-web-app-capable" content="yes"/>
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+		<meta name="apple-mobile-web-app-title" content="ohabits"/>
+		<meta name="mobile-web-app-capable" content="yes"/>
+
+		<!-- PWA Manifest -->
+		<link rel="manifest" href="/static/manifest.json"/>
+
+		<!-- App Icons -->
+		<link rel="icon" type="image/png" sizes="192x192" href="/static/images/icons/icon-192x192.png"/>
+		<link rel="apple-touch-icon" href="/static/images/icons/icon-192x192.png"/>
+		<link rel="apple-touch-icon" sizes="152x152" href="/static/images/icons/icon-152x152.png"/>
+		<link rel="apple-touch-icon" sizes="144x144" href="/static/images/icons/icon-144x144.png"/>
+		<link rel="apple-touch-icon" sizes="128x128" href="/static/images/icons/icon-128x128.png"/>
+		<link rel="apple-touch-icon" sizes="72x72" href="/static/images/icons/icon-72x72.png"/>
+
 		<link rel="stylesheet" href="/static/css/app.css"/>
 		<script src="/static/js/htmx.min.js"></script>
 		<script defer src="/static/js/alpine.min.js"></script>
@@ -128,7 +148,13 @@ templ Base(title string, user *database.User) {
 				'workout_deleted': 'تم حذف التمرين',
 				'workout_reordered': 'تم إعادة ترتيب التمارين ✓',
 				'med_saved': 'تم حفظ الدواء 💊',
-				'med_deleted': 'تم حذف الدواء'
+				'med_deleted': 'تم حذف الدواء',
+				'avatar_saved': 'تم تحديث صورة العرض ✓',
+				'avatar_error': 'خطأ في رفع الصورة',
+				'avatar_format_error': 'صيغة الصورة غير مدعومة',
+				'profile_saved': 'تم حفظ التغييرات ✓',
+				'password_changed': 'تم تغيير كلمة المرور ✓',
+				'profile_error': 'حدث خطأ'
 			};
 
 			function showToast(message, type) {
@@ -193,6 +219,21 @@ templ Base(title string, user *database.User) {
 				}
 			});
 
+		</script>
+
+		<!-- Service Worker Registration -->
+		<script>
+			if ('serviceWorker' in navigator) {
+				window.addEventListener('load', function() {
+					navigator.serviceWorker.register('/static/sw.js')
+						.then(function(registration) {
+							console.log('[PWA] Service Worker registered:', registration.scope);
+						})
+						.catch(function(error) {
+							console.log('[PWA] Service Worker registration failed:', error);
+						});
+				});
+			}
 		</script>
 	</body>
 	</html>
