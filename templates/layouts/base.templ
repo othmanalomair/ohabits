@@ -1,0 +1,286 @@
+package layouts
+
+import "ohabits/internal/database"
+
+templ Base(title string, user *database.User) {
+	<!DOCTYPE html>
+	<html lang="ar" dir="rtl">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ title } - ohabits</title>
+		<link rel="stylesheet" href="/static/css/app.css"/>
+		<script src="/static/js/htmx.min.js"></script>
+		<script defer src="/static/js/alpine.min.js"></script>
+	</head>
+	<body class="min-h-screen" x-data="{ menuOpen: false }">
+		<!-- Header -->
+		<header class="retro-header sticky top-0 z-50">
+			<div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+				<!-- Menu Button -->
+				<button
+					@click="menuOpen = !menuOpen"
+					class="text-white p-2 hover:bg-primary-600 rounded-lg transition-colors"
+				>
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 6h16M4 12h16M4 18h16"/>
+					</svg>
+				</button>
+
+				<!-- Logo -->
+				<a href="/" class="text-2xl font-extrabold text-white tracking-wide text-shadow-retro">
+					ohabits
+				</a>
+
+				<!-- Profile -->
+				if user != nil {
+					<a href="/profile" class="flex items-center gap-2">
+						<div class="w-10 h-10 rounded-full border-3 border-yellow-300 overflow-hidden bg-cream-100" style="box-shadow: 2px 2px 0 #9A3412;">
+							if user.GetAvatarURL() != "" {
+								<img src={ user.GetAvatarURL() } alt="Profile" class="w-full h-full object-cover"/>
+							} else {
+								<div class="w-full h-full flex items-center justify-center text-primary-600 font-bold">
+									{ string([]rune(user.DisplayName)[0]) }
+								</div>
+							}
+						</div>
+					</a>
+				} else {
+					<a href="/login" class="text-white font-bold">دخول</a>
+				}
+			</div>
+		</header>
+
+		<!-- Mobile Menu Overlay -->
+		<div
+			x-show="menuOpen"
+			x-transition:enter="transition ease-out duration-200"
+			x-transition:enter-start="opacity-0"
+			x-transition:enter-end="opacity-100"
+			x-transition:leave="transition ease-in duration-150"
+			x-transition:leave-start="opacity-100"
+			x-transition:leave-end="opacity-0"
+			@click="menuOpen = false"
+			class="fixed inset-0 bg-black/50 z-40"
+		></div>
+
+		<!-- Sidebar Menu -->
+		<nav
+			x-show="menuOpen"
+			x-transition:enter="transition ease-out duration-200"
+			x-transition:enter-start="translate-x-full"
+			x-transition:enter-end="translate-x-0"
+			x-transition:leave="transition ease-in duration-150"
+			x-transition:leave-start="translate-x-0"
+			x-transition:leave-end="translate-x-full"
+			class="fixed top-0 right-0 h-full w-72 bg-cream-50 border-l-4 border-primary-500 z-50 overflow-y-auto"
+			style="box-shadow: -4px 0 0 #C2410C;"
+		>
+			<div class="p-4">
+				<div class="flex justify-between items-center mb-6">
+					<h2 class="text-xl font-bold text-primary-800">القائمة</h2>
+					<button @click="menuOpen = false" class="text-primary-600 p-2">
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+						</svg>
+					</button>
+				</div>
+
+				<div class="space-y-2">
+					@menuItem("/", "الرئيسية", homeIcon())
+					@menuItem("/habits", "العادات", habitIcon())
+					@menuItem("/medications", "الأدوية", medicationIcon())
+					@menuItem("/workouts", "التمارين", workoutIcon())
+					@menuItem("/shows", "المسلسلات", showIcon())
+					@menuItem("/projects", "المشاريع", projectIcon())
+					@menuItem("/notes", "الملاحظات", noteIcon())
+					@menuItem("/profile", "الملف الشخصي", profileIcon())
+
+					<hr class="my-4 border-primary-200"/>
+
+					<a href="/logout" class="flex items-center gap-3 p-3 rounded-xl text-red-600 hover:bg-red-50 transition-colors">
+						@logoutIcon()
+						<span class="font-semibold">تسجيل الخروج</span>
+					</a>
+				</div>
+			</div>
+		</nav>
+
+		<!-- Main Content -->
+		<main class="max-w-4xl mx-auto px-4 py-6">
+			{ children... }
+		</main>
+
+		<!-- Bottom Navigation for Mobile -->
+		<nav class="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-primary-500 md:hidden z-30" style="box-shadow: 0 -4px 0 #C2410C;">
+			<div class="flex justify-around py-2">
+				@bottomNavItem("/", "الرئيسية", true)
+				@bottomNavItem("/projects", "المشاريع", false)
+				@bottomNavItem("/notes", "الملاحظات", false)
+				@bottomNavItem("/profile", "الملف", false)
+			</div>
+		</nav>
+
+		<!-- Spacer for bottom nav -->
+		<div class="h-20 md:hidden"></div>
+
+		<!-- Toast Container - Top of screen (above header z-50) -->
+		<div id="toast-container" style="position: fixed; top: 70px; right: 16px; width: 280px; z-index: 9999;"></div>
+
+		<!-- Toast Script -->
+		<script>
+			var toastMessages = {
+				'note_saved': 'تم حفظ المذكرة ✓',
+				'mood_saved': 'تم حفظ المزاج ✓',
+				'save_error': 'حدث خطأ في الحفظ',
+				'habit_saved': 'تم حفظ العادة ✓',
+				'todo_saved': 'تم حفظ المهمة ✓',
+				'images_saved': 'تم حفظ الصور ✓'
+			};
+
+			function showToast(message, type) {
+				type = type || 'success';
+				var container = document.getElementById('toast-container');
+				console.log('Container:', container);
+				if (!container) {
+					console.error('Toast container not found!');
+					alert(message); // Fallback to alert
+					return;
+				}
+				var toast = document.createElement('div');
+
+				var bgColor = type === 'success' ? '#d1fae5' : type === 'error' ? '#fee2e2' : '#ffedd5';
+				var borderColor = type === 'success' ? '#059669' : type === 'error' ? '#ef4444' : '#f97316';
+				var textColor = type === 'success' ? '#047857' : type === 'error' ? '#991b1b' : '#9a3412';
+				var shadowColor = type === 'success' ? '#047857' : '#C2410C';
+
+				toast.style.padding = '10px 14px';
+				toast.style.borderRadius = '10px';
+				toast.style.border = '2px solid ' + borderColor;
+				toast.style.backgroundColor = bgColor;
+				toast.style.color = textColor;
+				toast.style.boxShadow = '2px 2px 0 ' + shadowColor;
+				toast.style.direction = 'rtl';
+				toast.style.fontWeight = '600';
+				toast.style.fontSize = '14px';
+				toast.style.marginBottom = '8px';
+				toast.textContent = message;
+
+				container.appendChild(toast);
+
+				setTimeout(function() {
+					toast.style.opacity = '0';
+					toast.style.transform = 'translateY(-10px)';
+					toast.style.transition = 'all 0.3s';
+					setTimeout(function() { toast.remove(); }, 300);
+				}, 3000);
+			}
+
+			document.body.addEventListener('htmx:afterRequest', function(event) {
+				console.log('HTMX afterRequest', event.detail);
+				var xhr = event.detail.xhr;
+				if (xhr) {
+					var trigger = xhr.getResponseHeader('HX-Trigger');
+					console.log('HX-Trigger:', trigger);
+					if (trigger) {
+						try {
+							var data = JSON.parse(trigger);
+							console.log('Parsed:', data);
+							if (data.showToast) {
+								var msg = data.showToast.code ? toastMessages[data.showToast.code] : data.showToast.message;
+								console.log('Message:', msg);
+								if (msg) {
+									showToast(msg, data.showToast.type);
+								}
+							}
+						} catch(e) {
+							console.error('Error:', e);
+						}
+					}
+				}
+			});
+
+		</script>
+	</body>
+	</html>
+}
+
+templ menuItem(href string, label string, icon templ.Component) {
+	<a
+		href={ templ.SafeURL(href) }
+		@click="menuOpen = false"
+		class="flex items-center gap-3 p-3 rounded-xl text-retro-dark hover:bg-primary-100 transition-colors"
+	>
+		@icon
+		<span class="font-semibold">{ label }</span>
+	</a>
+}
+
+templ bottomNavItem(href string, label string, active bool) {
+	<a
+		href={ templ.SafeURL(href) }
+		class={ "flex flex-col items-center p-2", templ.KV("text-primary-600", active), templ.KV("text-gray-400", !active) }
+	>
+		<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+			<path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+		</svg>
+		<span class="text-xs font-bold">{ label }</span>
+	</a>
+}
+
+// Icons
+templ homeIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
+	</svg>
+}
+
+templ habitIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ medicationIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ workoutIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ showIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
+		<path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ projectIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+		<path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ noteIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ profileIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ logoutIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"/>
+	</svg>
+}

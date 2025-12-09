@@ -1,0 +1,125 @@
+package partials
+
+import (
+	"fmt"
+	"time"
+
+	"ohabits/internal/database"
+)
+
+templ WorkoutSection(workouts []database.Workout, log *database.WorkoutLog, date time.Time) {
+	<h3 class="section-title text-lg md:text-xl mb-3 md:mb-4">تمرين اليوم</h3>
+
+	<form
+		hx-post="/workout-log"
+		hx-target="#workout-section"
+		hx-swap="innerHTML"
+		x-data={ getWorkoutData(workouts, log) }
+	>
+		<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+
+		<!-- Workout Select -->
+		if len(workouts) > 0 {
+			<select
+				name="workout_name"
+				class="retro-input w-full mb-3 md:mb-4 text-sm md:text-base"
+				x-model="selectedWorkout"
+			>
+				<option value="">اختر التمرين</option>
+				for _, w := range workouts {
+					if log != nil && log.WorkoutName == w.Name {
+						<option value={ w.Name } selected>{ w.Name }</option>
+					} else {
+						<option value={ w.Name }>{ w.Name }</option>
+					}
+				}
+			</select>
+
+			<!-- Show exercises for selected workout -->
+			<template x-if="selectedWorkout">
+				<div class="space-y-2 mb-3 md:mb-4 text-retro-dark text-sm md:text-base">
+					for _, w := range workouts {
+						<template x-if={ fmt.Sprintf("selectedWorkout === '%s'", w.Name) }>
+							<div class="space-y-2">
+								for j, ex := range w.Exercises {
+									<div class="flex items-center gap-2">
+										<span class="retro-badge">{ fmt.Sprintf("%d", j+1) }</span>
+										<span>{ ex.Name }</span>
+									</div>
+								}
+							</div>
+						</template>
+					}
+				</div>
+			</template>
+		} else {
+			<input
+				type="text"
+				name="workout_name"
+				class="retro-input w-full mb-3 md:mb-4 text-sm md:text-base"
+				placeholder="اسم التمرين"
+				if log != nil {
+					value={ log.WorkoutName }
+				}
+			/>
+		}
+
+		<!-- Weight and Cardio -->
+		<div class="grid grid-cols-2 gap-2 md:gap-3 mb-3 md:mb-4">
+			<div>
+				<label class="text-xs md:text-sm text-primary-700 font-semibold">الوزن (كجم)</label>
+				<input
+					type="number"
+					step="0.1"
+					name="weight"
+					class="retro-input w-full mt-1 text-sm md:text-base"
+					placeholder="٠"
+					if log != nil && log.Weight > 0 {
+						value={ fmt.Sprintf("%.1f", log.Weight) }
+					}
+				/>
+			</div>
+			<div>
+				<label class="text-xs md:text-sm text-primary-700 font-semibold">كارديو (دقائق)</label>
+				<input
+					type="number"
+					name="cardio_minutes"
+					class="retro-input w-full mt-1 text-sm md:text-base"
+					placeholder="٠"
+					if log != nil && log.Cardio != nil {
+						value={ fmt.Sprintf("%d", log.Cardio.Minutes) }
+					}
+				/>
+			</div>
+		</div>
+
+		<!-- Cardio Name -->
+		<input
+			type="text"
+			name="cardio_name"
+			class="retro-input w-full mb-3 md:mb-4 text-sm md:text-base"
+			placeholder="نوع الكارديو (مثال: مشي، جري)"
+			if log != nil && log.Cardio != nil {
+				value={ log.Cardio.Name }
+			}
+		/>
+
+		<button type="submit" class="anime-btn w-full py-2.5 md:py-3 text-sm md:text-base">
+			💪 حفظ التمرين
+		</button>
+
+		if log != nil {
+			<p class="text-xs md:text-sm text-primary-600 mt-2 text-center">
+				تم حفظ تمرين اليوم ✓
+			</p>
+		}
+	</form>
+}
+
+func getWorkoutData(workouts []database.Workout, log *database.WorkoutLog) string {
+	selected := ""
+	if log != nil {
+		selected = log.WorkoutName
+	}
+	return fmt.Sprintf("{ selectedWorkout: '%s' }", selected)
+}

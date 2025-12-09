@@ -1,0 +1,322 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"ohabits/internal/database"
+	"ohabits/templates/layouts"
+	"ohabits/templates/partials"
+)
+
+templ Dashboard(user *database.User, data database.DashboardData) {
+	@layouts.Base("الرئيسية", user) {
+		<div class="space-y-4">
+			<!-- Weekly Calendar -->
+			@weeklyCalendar(data.Date)
+
+			<!-- Main Grid -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+				<!-- Right Column (RTL first) -->
+				<div class="space-y-4 md:space-y-6">
+					<!-- Habits -->
+					@habitsSection(data.Habits, data.Date)
+
+					<!-- Medications -->
+					@medicationsSection(data.Medications, data.Date)
+
+					<!-- Todos -->
+					@todosSection(data.Todos, data.Date)
+				</div>
+
+				<!-- Left Column -->
+				<div class="space-y-4 md:space-y-6">
+					<!-- Notes -->
+					@notesSection(data.Note, data.Images, data.Date)
+
+					<!-- Mood -->
+					@moodSection(data.MoodRating, data.Date)
+
+					<!-- Workout -->
+					@workoutSection(data.Workouts, data.WorkoutLog, data.Date)
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ weeklyCalendar(selectedDate time.Time) {
+	<div class="retro-card p-3 md:p-4" x-data="{ showPicker: false }">
+		<!-- Current Date Display -->
+		<div class="text-center mb-3">
+			<h2 class="text-2xl md:text-3xl font-extrabold text-retro-dark">{ getArabicDay(selectedDate.Weekday()) }</h2>
+			<p class="text-primary-600 font-semibold text-sm md:text-base">{ formatArabicDate(selectedDate) }</p>
+		</div>
+
+		<!-- Week Days Navigation -->
+		<div class="flex justify-center gap-1 md:gap-2 mb-3 overflow-x-auto scrollbar-hide py-2">
+			for _, day := range getWeekDays(selectedDate) {
+				<a
+					href={ templ.SafeURL(fmt.Sprintf("/?date=%s", day.Format("2006-01-02"))) }
+					class={
+						"flex flex-col items-center p-2 md:p-3 rounded-xl min-w-[48px] md:min-w-[56px] transition-all",
+						templ.KV("bg-primary-500 text-white shadow-lg", isSameDay(day, selectedDate)),
+						templ.KV("bg-cream-100 hover:bg-primary-100 text-retro-dark border-2 border-accent-gold", !isSameDay(day, selectedDate) && isWeekend(day)),
+						templ.KV("bg-cream-100 hover:bg-primary-100 text-retro-dark", !isSameDay(day, selectedDate) && !isWeekend(day)),
+						templ.KV("ring-2 ring-primary-300", isToday(day) && !isSameDay(day, selectedDate)),
+					}
+				>
+					<span class="text-xs font-medium">{ getShortArabicDay(day.Weekday()) }</span>
+					<span class="text-lg md:text-xl font-bold">{ fmt.Sprintf("%d", day.Day()) }</span>
+				</a>
+			}
+		</div>
+
+		<!-- Navigation Buttons -->
+		<div class="flex justify-center items-center gap-2 flex-wrap">
+			<a
+				href={ templ.SafeURL(fmt.Sprintf("/?date=%s", selectedDate.AddDate(0, 0, -7).Format("2006-01-02"))) }
+				class="anime-btn px-3 py-1.5 text-xs md:text-sm"
+			>
+				الأسبوع السابق
+			</a>
+
+			if !isToday(selectedDate) {
+				<a
+					href="/"
+					class="anime-btn px-3 py-1.5 text-xs md:text-sm"
+				>
+					اليوم
+				</a>
+			}
+
+			<a
+				href={ templ.SafeURL(fmt.Sprintf("/?date=%s", selectedDate.AddDate(0, 0, 7).Format("2006-01-02"))) }
+				class="anime-btn px-3 py-1.5 text-xs md:text-sm"
+			>
+				الأسبوع القادم
+			</a>
+
+			<button
+				@click="showPicker = !showPicker"
+				class="anime-btn px-3 py-1.5 text-xs md:text-sm"
+			>
+				📅
+			</button>
+		</div>
+
+		<!-- Date Picker -->
+		<div x-show="showPicker" x-transition class="mt-3 text-center">
+			<input
+				type="date"
+				value={ selectedDate.Format("2006-01-02") }
+				class="retro-input text-center"
+				@change="window.location.href = '/?date=' + $event.target.value"
+			/>
+		</div>
+	</div>
+}
+
+templ habitsSection(habits []database.HabitWithCompletion, date time.Time) {
+	<div class="retro-card p-4 md:p-5">
+		<h3 class="section-title text-lg md:text-xl mb-3 md:mb-4">عادات اليوم</h3>
+
+		<div id="habits-list">
+			@partials.HabitsList(habits, date)
+		</div>
+
+		<!-- Add Habit Form -->
+		<form
+			hx-post="/habits"
+			hx-target="#habits-list"
+			hx-swap="innerHTML"
+			class="mt-3 md:mt-4 pt-3 md:pt-4 border-t-2 border-primary-200"
+			x-data="{ showForm: false }"
+		>
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+
+			<button type="button" @click="showForm = !showForm" class="text-primary-600 font-semibold text-sm">
+				+ إضافة عادة جديدة
+			</button>
+
+			<div x-show="showForm" x-transition class="mt-3 space-y-3">
+				<input
+					type="text"
+					name="name"
+					placeholder="اسم العادة"
+					class="retro-input w-full text-sm md:text-base"
+					required
+				/>
+
+				<!-- Days Selection -->
+				<div class="flex flex-wrap gap-1.5 md:gap-2">
+					for i, day := range []string{"أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"} {
+						<label class="flex items-center gap-1 text-xs md:text-sm bg-cream-100 px-2 py-1 rounded-lg cursor-pointer hover:bg-primary-100">
+							<input type="checkbox" name={ fmt.Sprintf("day_%d", i) } class="w-3.5 h-3.5 md:w-4 md:h-4"/>
+							<span>{ day }</span>
+						</label>
+					}
+				</div>
+
+				<button type="submit" class="anime-btn px-4 py-2 text-sm">
+					إضافة
+				</button>
+			</div>
+		</form>
+	</div>
+}
+
+templ medicationsSection(medications []database.MedicationWithLog, date time.Time) {
+	<div class="retro-card p-4 md:p-5">
+		<h3 class="section-title text-lg md:text-xl mb-3 md:mb-4">الأدوية</h3>
+
+		<div id="medications-list">
+			@partials.MedicationsList(medications, date)
+		</div>
+
+		<!-- Add Medication Form -->
+		<form
+			hx-post="/medications"
+			hx-target="#medications-list"
+			hx-swap="innerHTML"
+			class="mt-3 md:mt-4 pt-3 md:pt-4 border-t-2 border-primary-200"
+			x-data="{ showForm: false }"
+		>
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+
+			<button type="button" @click="showForm = !showForm" class="text-primary-600 font-semibold text-sm">
+				+ إضافة دواء جديد
+			</button>
+
+			<div x-show="showForm" x-transition class="mt-3 space-y-3">
+				<input
+					type="text"
+					name="name"
+					placeholder="اسم الدواء"
+					class="retro-input w-full text-sm md:text-base"
+					required
+				/>
+				<input
+					type="text"
+					name="dosage"
+					placeholder="الجرعة (مثال: 500mg)"
+					class="retro-input w-full text-sm md:text-base"
+				/>
+				<button type="submit" class="anime-btn px-4 py-2 text-sm">
+					إضافة
+				</button>
+			</div>
+		</form>
+	</div>
+}
+
+templ todosSection(todos []database.Todo, date time.Time) {
+	<div class="retro-card p-4 md:p-5">
+		<h3 class="section-title text-lg md:text-xl mb-3 md:mb-4">مهام اليوم</h3>
+
+		<!-- Add Todo Form -->
+		<form
+			hx-post="/todos"
+			hx-target="#todos-list"
+			hx-swap="innerHTML"
+			class="flex gap-2 mb-3 md:mb-4"
+		>
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+			<input
+				type="text"
+				name="text"
+				placeholder="أضف مهمة جديدة..."
+				class="retro-input flex-1 text-sm md:text-base py-2 md:py-3"
+				required
+			/>
+			<button type="submit" class="anime-btn px-3 md:px-4 py-2 text-sm">إضافة</button>
+		</form>
+
+		<div id="todos-list">
+			@partials.TodosList(todos, date)
+		</div>
+	</div>
+}
+
+templ notesSection(note *database.Note, images []database.DailyImage, date time.Time) {
+	<div class="retro-card p-4 md:p-5" id="note-section">
+		@partials.NoteSection(note, images, date)
+	</div>
+}
+
+templ moodSection(mood *database.MoodRating, date time.Time) {
+	<div class="retro-card p-4 md:p-5" id="mood-section">
+		@partials.MoodSection(mood, date)
+	</div>
+}
+
+templ workoutSection(workouts []database.Workout, log *database.WorkoutLog, date time.Time) {
+	<div class="retro-card p-4 md:p-5" id="workout-section">
+		@partials.WorkoutSection(workouts, log, date)
+	</div>
+}
+
+// Helper functions
+func getArabicDay(weekday time.Weekday) string {
+	days := map[time.Weekday]string{
+		time.Sunday:    "الأحد",
+		time.Monday:    "الاثنين",
+		time.Tuesday:   "الثلاثاء",
+		time.Wednesday: "الأربعاء",
+		time.Thursday:  "الخميس",
+		time.Friday:    "الجمعة",
+		time.Saturday:  "السبت",
+	}
+	return days[weekday]
+}
+
+func getShortArabicDay(weekday time.Weekday) string {
+	days := map[time.Weekday]string{
+		time.Sunday:    "أحد",
+		time.Monday:    "اثن",
+		time.Tuesday:   "ثلا",
+		time.Wednesday: "أرب",
+		time.Thursday:  "خمي",
+		time.Friday:    "جمع",
+		time.Saturday:  "سبت",
+	}
+	return days[weekday]
+}
+
+func formatArabicDate(date time.Time) string {
+	months := []string{
+		"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+		"يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+	}
+	return fmt.Sprintf("%d %s %d", date.Day(), months[date.Month()-1], date.Year())
+}
+
+func getWeekDays(selectedDate time.Time) []time.Time {
+	// Find the start of the week (Sunday for Arabic calendar)
+	// In Go, Sunday = 0
+	weekday := int(selectedDate.Weekday())
+	startOfWeek := selectedDate.AddDate(0, 0, -weekday)
+
+	days := make([]time.Time, 7)
+	for i := 0; i < 7; i++ {
+		days[i] = startOfWeek.AddDate(0, 0, i)
+	}
+	return days
+}
+
+// isWeekend returns true if the day is Friday or Saturday (Kuwait weekend)
+func isWeekend(date time.Time) bool {
+	weekday := date.Weekday()
+	return weekday == time.Friday || weekday == time.Saturday
+}
+
+func isSameDay(a, b time.Time) bool {
+	return a.Year() == b.Year() && a.Month() == b.Month() && a.Day() == b.Day()
+}
+
+func isToday(date time.Time) bool {
+	// Use Kuwait timezone
+	kuwaitTZ := time.FixedZone("Asia/Kuwait", 3*60*60)
+	now := time.Now().In(kuwaitTZ)
+	return date.Year() == now.Year() && date.Month() == now.Month() && date.Day() == now.Day()
+}

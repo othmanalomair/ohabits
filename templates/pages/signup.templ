@@ -1,0 +1,91 @@
+package pages
+
+templ Signup(errorMsg string, email string) {
+	<!DOCTYPE html>
+	<html lang="ar" dir="rtl">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>إنشاء حساب - ohabits</title>
+		<link rel="stylesheet" href="/static/css/app.css"/>
+	</head>
+	<body class="min-h-screen flex items-center justify-center p-4">
+		<div class="w-full max-w-md">
+			<!-- Logo -->
+			<div class="text-center mb-8">
+				<h1 class="text-4xl font-extrabold text-primary-600 mb-2" style="text-shadow: 3px 3px 0 #C2410C;">
+					ohabits
+				</h1>
+				<p class="text-retro-brown">تتبع عاداتك وحقق أهدافك</p>
+			</div>
+
+			<!-- Signup Card -->
+			<div class="retro-card p-6">
+				<h2 class="section-title text-2xl mb-6 text-center">إنشاء حساب جديد</h2>
+
+				if errorMsg != "" {
+					<div class="bg-red-100 border-2 border-red-500 text-red-700 p-3 rounded-xl mb-4 text-center">
+						{ errorMsg }
+					</div>
+				}
+
+				<form method="POST" action="/signup" class="space-y-4">
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-2">الاسم</label>
+						<input
+							type="text"
+							name="display_name"
+							class="retro-input w-full"
+							placeholder="اسمك"
+						/>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-2">البريد الإلكتروني</label>
+						<input
+							type="email"
+							name="email"
+							value={ email }
+							required
+							class="retro-input w-full"
+							placeholder="example@email.com"
+						/>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-2">كلمة المرور</label>
+						<input
+							type="password"
+							name="password"
+							required
+							minlength="6"
+							class="retro-input w-full"
+							placeholder="٦ أحرف على الأقل"
+						/>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-2">تأكيد كلمة المرور</label>
+						<input
+							type="password"
+							name="confirm_password"
+							required
+							class="retro-input w-full"
+							placeholder="أعد كتابة كلمة المرور"
+						/>
+					</div>
+
+					<button type="submit" class="anime-btn w-full py-3 text-lg">
+						إنشاء حساب
+					</button>
+				</form>
+
+				<p class="text-center mt-6 text-retro-brown">
+					لديك حساب بالفعل؟
+					<a href="/login" class="text-primary-600 font-bold hover:underline">تسجيل الدخول</a>
+				</p>
+			</div>
+		</div>
+	</body>
+	</html>
+}

@@ -1,0 +1,60 @@
+package partials
+
+import (
+	"time"
+
+	"ohabits/internal/database"
+)
+
+templ TodosList(todos []database.Todo, date time.Time) {
+	if len(todos) == 0 {
+		<p class="text-gray-400 text-center py-4 text-sm md:text-base">لا توجد مهام لهذا اليوم</p>
+	} else {
+		<div class="space-y-1 md:space-y-2">
+			for _, todo := range todos {
+				@TodoItem(todo, date, todo.Completed)
+			}
+		</div>
+	}
+}
+
+templ TodoItem(todo database.Todo, date time.Time, completed bool) {
+	<div
+		id={ "todo-" + todo.ID.String() }
+		class="flex items-center gap-2 md:gap-3 p-2 hover:bg-cream-100 rounded-lg transition-colors"
+	>
+		<form
+			hx-post={ "/todos/" + todo.ID.String() + "/toggle" }
+			hx-target={ "#todo-" + todo.ID.String() }
+			hx-swap="outerHTML"
+		>
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+			<button type="submit" class={ "retro-checkbox", templ.KV("checked", completed) }>
+				if completed {
+					<svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+						<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+					</svg>
+				}
+			</button>
+		</form>
+
+		<span class={ "flex-1 text-sm md:text-base", templ.KV("line-through text-gray-400", completed), templ.KV("text-retro-dark font-medium", !completed) }>
+			{ todo.Text }
+		</span>
+
+		<form
+			hx-delete={ "/todos/" + todo.ID.String() }
+			hx-target="#todos-list"
+			hx-swap="innerHTML"
+			hx-confirm="هل تريد حذف هذه المهمة؟"
+			class="flex-shrink-0"
+		>
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+			<button type="submit" class="text-red-400 hover:text-red-600 p-1">
+				<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+					<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+				</svg>
+			</button>
+		</form>
+	</div>
+}

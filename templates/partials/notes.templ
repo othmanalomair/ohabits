@@ -1,0 +1,195 @@
+package partials
+
+import (
+	"fmt"
+	"time"
+
+	"ohabits/internal/database"
+)
+
+templ NoteSection(note *database.Note, images []database.DailyImage, date time.Time) {
+	<h3 class="section-title text-lg md:text-xl mb-3 md:mb-4">مذكرة اليوم</h3>
+
+	<form
+		hx-post="/notes"
+		hx-target="#note-section"
+		hx-swap="innerHTML"
+	>
+		<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+
+		<textarea
+			name="text"
+			class="retro-input w-full h-20 resize-none text-sm md:text-base"
+			placeholder="اكتب أفكارك ومشاعرك هنا..."
+			dir="rtl"
+		>
+			if note != nil {
+				{ note.Text }
+			}
+		</textarea>
+
+		<!-- Small thumbnails below textarea -->
+		<div id="image-gallery" class="flex flex-wrap gap-1 mt-2">
+			@ImageGallery(images, date)
+		</div>
+
+		<div class="flex gap-2 mt-2 md:mt-3">
+			<button type="submit" class="anime-btn flex-1 py-2.5 md:py-3 text-sm md:text-base">
+				💾 حفظ المذكرة
+			</button>
+			<label class="anime-btn px-4 py-2.5 md:py-3 text-sm md:text-base cursor-pointer">
+				📷
+				<input
+					type="file"
+					accept="image/*"
+					multiple
+					class="hidden"
+					hx-post="/images"
+					hx-target="#image-gallery"
+					hx-swap="innerHTML"
+					hx-encoding="multipart/form-data"
+					name="images"
+					hx-vals={ fmt.Sprintf(`{"date": "%s"}`, date.Format("2006-01-02")) }
+				/>
+			</label>
+		</div>
+	</form>
+}
+
+templ ImageGallery(images []database.DailyImage, date time.Time) {
+	if len(images) > 0 {
+		<div
+			class="flex flex-row flex-wrap gap-3 p-1"
+			x-data="{ lightbox: false, currentIndex: 0, images: [] }"
+			x-init={ initImagesData(images) }
+		>
+			for i, img := range images {
+				<div class="relative group">
+					<img
+						src={ img.ThumbnailPath }
+						alt={ img.Filename }
+						class="w-10 h-10 object-cover rounded cursor-pointer border-2 border-primary-200 hover:border-primary-500 transition-colors"
+						@click={ fmt.Sprintf("lightbox = true; currentIndex = %d", i) }
+					/>
+					<button
+						type="button"
+						hx-delete={ fmt.Sprintf("/images/%s", img.ID.String()) }
+						hx-target="#image-gallery"
+						hx-swap="innerHTML"
+						hx-vals={ fmt.Sprintf(`{"date": "%s"}`, date.Format("2006-01-02")) }
+						hx-confirm="هل تريد حذف هذه الصورة؟"
+						class="absolute -top-2 -left-2 w-5 h-5 bg-white hover:bg-gray-100 rounded-full text-xs font-bold flex items-center justify-center shadow-lg border-2 border-red-500"
+					>
+						<span style="color: #dc2626 !important; font-weight: bold; font-size: 14px;">×</span>
+					</button>
+				</div>
+			}
+
+			<!-- Lightbox Modal - teleported to body -->
+			<template x-teleport="body">
+				<div
+					x-show="lightbox"
+					x-cloak
+					@keydown.escape.window="lightbox = false"
+					@click="lightbox = false"
+					style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 9999;"
+				>
+					<!-- Close Button - top right -->
+					<button
+						@click.stop="lightbox = false"
+						style="position: absolute; top: 16px; right: 16px; width: 44px; height: 44px; background: white; border: 2px solid #dc2626; border-radius: 50%; font-size: 24px; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;"
+					>
+						×
+					</button>
+
+					<!-- Counter - top left -->
+					if len(images) > 1 {
+						<div style="position: absolute; top: 16px; left: 16px; background: white; color: #333; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; z-index: 10;">
+							<span x-text="currentIndex + 1"></span> / { fmt.Sprintf("%d", len(images)) }
+						</div>
+					}
+
+					<!-- Left Arrow -->
+					if len(images) > 1 {
+						<button
+							@click.stop="currentIndex = (currentIndex - 1 + images.length) % images.length"
+							style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; background: white; border-radius: 50%; font-size: 24px; color: #333; cursor: pointer; border: none; z-index: 10;"
+						>
+							›
+						</button>
+					}
+
+					<!-- Right Arrow -->
+					if len(images) > 1 {
+						<button
+							@click.stop="currentIndex = (currentIndex + 1) % images.length"
+							style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; background: white; border-radius: 50%; font-size: 24px; color: #333; cursor: pointer; border: none; z-index: 10;"
+						>
+							‹
+						</button>
+					}
+
+					<!-- Image - perfectly centered -->
+					<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 70px 60px 20px 60px;">
+						<img
+							:src="images[currentIndex]"
+							@click.stop
+							style="max-height: 100%; max-width: 100%; object-fit: contain; border-radius: 8px;"
+						/>
+					</div>
+				</div>
+			</template>
+		</div>
+	}
+}
+
+func initImagesData(images []database.DailyImage) string {
+	paths := "["
+	for i, img := range images {
+		if i > 0 {
+			paths += ","
+		}
+		paths += fmt.Sprintf(`"%s"`, img.OriginalPath)
+	}
+	paths += "]"
+	return fmt.Sprintf("images = %s", paths)
+}
+
+templ MoodSection(mood *database.MoodRating, date time.Time) {
+	<h3 class="section-title text-lg md:text-xl mb-3 md:mb-4">شلون يومك؟</h3>
+
+	<div class="flex justify-center gap-2 md:gap-3" x-data={ getMoodData(mood) }>
+		@moodButton(1, "😢", date)
+		@moodButton(2, "😕", date)
+		@moodButton(3, "😐", date)
+		@moodButton(4, "🙂", date)
+		@moodButton(5, "😄", date)
+	</div>
+
+	if mood != nil {
+		<p class="text-xs md:text-sm text-primary-600 mt-3 text-center">
+			تم حفظ مزاجك ✓
+		</p>
+	}
+}
+
+templ moodButton(rating int, emoji string, date time.Time) {
+	<button
+		type="button"
+		hx-post="/mood"
+		hx-target="#mood-section"
+		hx-swap="innerHTML"
+		hx-vals={ fmt.Sprintf(`{"rating": "%d", "date": "%s"}`, rating, date.Format("2006-01-02")) }
+		class="mood-btn w-10 h-10 md:w-12 md:h-12 text-xl md:text-2xl"
+		:class={ fmt.Sprintf("{ 'selected': selected == %d }", rating) }
+	>
+		{ emoji }
+	</button>
+}
+
+func getMoodData(mood *database.MoodRating) string {
+	if mood != nil {
+		return fmt.Sprintf("{ selected: %d }", mood.Rating)
+	}
+	return "{ selected: 0 }"
+}

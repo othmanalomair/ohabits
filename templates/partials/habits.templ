@@ -1,0 +1,45 @@
+package partials
+
+import (
+	"time"
+
+	"ohabits/internal/database"
+)
+
+templ HabitsList(habits []database.HabitWithCompletion, date time.Time) {
+	if len(habits) == 0 {
+		<p class="text-gray-400 text-center py-4 text-sm md:text-base">لا توجد عادات لهذا اليوم</p>
+	} else {
+		<div class="space-y-2 md:space-y-3">
+			for _, habit := range habits {
+				@HabitItem(habit, date, habit.Completed)
+			}
+		</div>
+	}
+}
+
+templ HabitItem(habit database.HabitWithCompletion, date time.Time, completed bool) {
+	<div
+		id={ "habit-" + habit.ID.String() }
+		class={ "med-item flex items-center justify-between p-3 md:p-4", templ.KV("taken", completed) }
+	>
+		<span class={ "font-semibold text-sm md:text-base", templ.KV("text-retro-dark", !completed), templ.KV("line-through text-gray-400", completed) }>
+			{ habit.Name }
+		</span>
+
+		<form
+			hx-post={ "/habits/" + habit.ID.String() + "/toggle" }
+			hx-target={ "#habit-" + habit.ID.String() }
+			hx-swap="outerHTML"
+		>
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+			<button type="submit" class={ "retro-checkbox", templ.KV("checked", completed) }>
+				if completed {
+					<svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+						<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+					</svg>
+				}
+			</button>
+		</form>
+	</div>
+}
