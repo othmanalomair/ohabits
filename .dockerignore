@@ -30,3 +30,6 @@ Thumbs.db
 
 # Test files
 *_test.go
+
+# Node modules (will be installed in container)
+node_modules/

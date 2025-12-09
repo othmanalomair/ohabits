@@ -49,6 +49,7 @@ func main() {
 	// Static files
 	e.Static("/static", "static")
 	e.Static("/uploads", "uploads")
+	e.File("/favicon.ico", "static/images/icons/icon-192x192.png")
 
 	// Public routes
 	e.GET("/login", h.LoginPage)

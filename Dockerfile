@@ -2,10 +2,13 @@
 FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git nodejs npm
 
 # Install templ
 RUN go install github.com/a-h/templ/cmd/templ@latest
+
+# Install Tailwind CSS
+RUN npm install -g tailwindcss
 
 WORKDIR /app
 
@@ -18,6 +21,9 @@ COPY . .
 
 # Generate templ files
 RUN templ generate
+
+# Build Tailwind CSS
+RUN npx tailwindcss -i ./static/css/input.css -o ./static/css/app.css --minify
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ohabits ./cmd/server
