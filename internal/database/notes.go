@@ -88,3 +88,63 @@ func (db *DB) SaveMood(ctx context.Context, userID uuid.UUID, rating int, date t
 
 	return &m, nil
 }
+
+// GetNotesForMonth retrieves all notes for a specific month
+func (db *DB) GetNotesForMonth(ctx context.Context, userID uuid.UUID, year int, month int) ([]Note, error) {
+	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	endDate := startDate.AddDate(0, 1, 0).Add(-time.Second)
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, user_id, text, date, created_at, updated_at
+		FROM notes
+		WHERE user_id = $1 AND date >= $2 AND date <= $3
+		ORDER BY date ASC
+	`, userID, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notes []Note
+	for rows.Next() {
+		var n Note
+		if err := rows.Scan(&n.ID, &n.UserID, &n.Text, &n.Date, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, err
+		}
+		notes = append(notes, n)
+	}
+
+	return notes, rows.Err()
+}
+
+// GetDatesWithContentForMonth retrieves all unique dates that have notes, images, or todos
+func (db *DB) GetDatesWithContentForMonth(ctx context.Context, userID uuid.UUID, year int, month int) ([]time.Time, error) {
+	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	endDate := startDate.AddDate(0, 1, 0).Add(-time.Second)
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT DISTINCT date FROM (
+			SELECT date FROM notes WHERE user_id = $1 AND date >= $2 AND date <= $3
+			UNION
+			SELECT date FROM daily_images WHERE user_id = $1 AND date >= $2 AND date <= $3
+			UNION
+			SELECT date FROM todos WHERE user_id = $1 AND date >= $2 AND date <= $3
+		) AS all_dates
+		ORDER BY date ASC
+	`, userID, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dates []time.Time
+	for rows.Next() {
+		var d time.Time
+		if err := rows.Scan(&d); err != nil {
+			return nil, err
+		}
+		dates = append(dates, d)
+	}
+
+	return dates, rows.Err()
+}

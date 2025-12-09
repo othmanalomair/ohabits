@@ -82,7 +82,7 @@ type Medication struct {
 	UserID        uuid.UUID  `json:"user_id"`
 	Name          string     `json:"name"`
 	Dosage        string     `json:"dosage"`
-	ScheduledDays []int      `json:"scheduled_days"`
+	ScheduledDays []string   `json:"scheduled_days"` // Day names: "Sunday", "Monday", etc.
 	TimesPerDay   int        `json:"times_per_day"`
 	DurationType  string     `json:"duration_type"` // "lifetime" or "limited"
 	StartDate     *time.Time `json:"start_date"`
@@ -117,6 +117,7 @@ type Todo struct {
 	Completed bool      `json:"completed"`
 	Date      time.Time `json:"date"`
 	CreatedAt time.Time `json:"created_at"`
+	IsOverdue bool      `json:"is_overdue"` // true if task is from a past date
 }
 
 // Note represents a daily quick note
@@ -159,7 +160,6 @@ type Workout struct {
 	Day          string     `json:"day"`
 	Exercises    []Exercise `json:"exercises"`
 	DisplayOrder int        `json:"display_order"`
-	IsActive     bool       `json:"is_active"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
@@ -174,13 +174,13 @@ type Exercise struct {
 type WorkoutLog struct {
 	ID                 uuid.UUID  `json:"id"`
 	UserID             uuid.UUID  `json:"user_id"`
-	WorkoutName        string     `json:"workout_name"`
+	WorkoutName        string     `json:"workout_name"` // maps to "name" column in DB
 	CompletedExercises []Exercise `json:"completed_exercises"`
-	Cardio             *Cardio    `json:"cardio"`
+	Cardio             []Cardio   `json:"cardio"` // array in DB
 	Weight             float64    `json:"weight"`
 	Date               time.Time  `json:"date"`
-	Notes              string     `json:"notes"`
 	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 // Cardio represents cardio activity
@@ -273,4 +273,12 @@ type DashboardData struct {
 	MoodRating  *MoodRating
 	Workouts    []Workout
 	WorkoutLog  *WorkoutLog
+}
+
+// DailyNoteEntry holds data for a single day in the daily notes page
+type DailyNoteEntry struct {
+	Date   time.Time
+	Note   *Note
+	Todos  []Todo
+	Images []DailyImage
 }

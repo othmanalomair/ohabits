@@ -1,0 +1,319 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"ohabits/internal/database"
+	"ohabits/templates/layouts"
+)
+
+// Arabic month names
+var arabicMonths = map[time.Month]string{
+	time.January:   "يناير",
+	time.February:  "فبراير",
+	time.March:     "مارس",
+	time.April:     "أبريل",
+	time.May:       "مايو",
+	time.June:      "يونيو",
+	time.July:      "يوليو",
+	time.August:    "أغسطس",
+	time.September: "سبتمبر",
+	time.October:   "أكتوبر",
+	time.November:  "نوفمبر",
+	time.December:  "ديسمبر",
+}
+
+// Arabic day names
+var arabicDays = map[time.Weekday]string{
+	time.Sunday:    "الأحد",
+	time.Monday:    "الإثنين",
+	time.Tuesday:   "الثلاثاء",
+	time.Wednesday: "الأربعاء",
+	time.Thursday:  "الخميس",
+	time.Friday:    "الجمعة",
+	time.Saturday:  "السبت",
+}
+
+templ DailyNotesPage(user *database.User, entries []database.DailyNoteEntry, year int, month int) {
+	@layouts.Base("مذكرة اليوم", user) {
+		<div class="max-w-2xl mx-auto space-y-4">
+			<!-- Header with Month Navigation -->
+			<div class="retro-card p-4 md:p-5">
+				<div class="flex items-center justify-between">
+					<a
+						href={ templ.SafeURL(fmt.Sprintf("/daily-notes?year=%d&month=%d", getPrevMonth(year, month))) }
+						class="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors"
+					>
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+						</svg>
+					</a>
+
+					<h1 class="text-xl md:text-2xl font-bold text-retro-dark">
+						{ arabicMonths[time.Month(month)] } { fmt.Sprintf("%d", year) }
+					</h1>
+
+					<a
+						href={ templ.SafeURL(fmt.Sprintf("/daily-notes?year=%d&month=%d", getNextMonth(year, month))) }
+						class="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors"
+					>
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+						</svg>
+					</a>
+				</div>
+
+				<p class="text-center text-sm text-gray-500 mt-2">
+					{ fmt.Sprintf("%d", len(entries)) } يوم في هذا الشهر
+				</p>
+			</div>
+
+			<!-- Notebook Container -->
+			<div class="notebook-container">
+				if len(entries) == 0 {
+					<div class="retro-card p-8 text-center">
+						<div class="text-6xl mb-4">📓</div>
+						<p class="text-gray-500">لا توجد مذكرات في هذا الشهر</p>
+						<a href="/" class="inline-block mt-4 anime-btn px-4 py-2">
+							اكتب مذكرة اليوم
+						</a>
+					</div>
+				} else {
+					<div class="space-y-4">
+						for _, entry := range entries {
+							@NotebookEntry(entry)
+						}
+					</div>
+				}
+			</div>
+		</div>
+
+		<style>
+			.notebook-page {
+				background-color: #fffbf5;
+				background-image: repeating-linear-gradient(
+					transparent,
+					transparent 31px,
+					#e5d5c5 31px,
+					#e5d5c5 32px
+				);
+				background-position: 0 80px;
+				border-right: 4px solid #F97316;
+				position: relative;
+			}
+
+			.notebook-page::after {
+				content: '';
+				position: absolute;
+				top: 0;
+				left: 50px;
+				width: 2px;
+				height: 100%;
+				background: #ffcccc;
+				z-index: 0;
+				pointer-events: none;
+			}
+
+			.notebook-page > * {
+				position: relative;
+				z-index: 1;
+			}
+
+			.notebook-date {
+				background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+				color: white;
+				padding: 8px 16px;
+				border-radius: 0 0 12px 12px;
+				display: inline-block;
+				font-weight: bold;
+				box-shadow: 2px 2px 0 #C2410C;
+				cursor: pointer;
+				transition: transform 0.1s, box-shadow 0.1s;
+			}
+
+			.notebook-date:hover {
+				transform: translateY(-2px);
+				box-shadow: 3px 3px 0 #C2410C;
+			}
+
+			.notebook-date:active {
+				transform: translateY(0);
+				box-shadow: 1px 1px 0 #C2410C;
+			}
+
+			.notebook-text {
+				line-height: 32px;
+				padding-top: 8px;
+			}
+		</style>
+	}
+}
+
+templ NotebookEntry(entry database.DailyNoteEntry) {
+	<div class="notebook-page rounded-xl p-4 md:p-6 shadow-lg border-2 border-primary-200" style="box-shadow: 4px 4px 0 #C2410C;">
+		<!-- Date Header -->
+		<div class="flex justify-center -mt-8 mb-4">
+			<a href={ templ.SafeURL(fmt.Sprintf("/?date=%s", entry.Date.Format("2006-01-02"))) } class="notebook-date">
+				<span class="text-lg">{ arabicDays[entry.Date.Weekday()] }</span>
+				<span class="mx-2">•</span>
+				<span>{ fmt.Sprintf("%d", entry.Date.Day()) } { arabicMonths[entry.Date.Month()] }</span>
+			</a>
+		</div>
+
+		<!-- Note Text -->
+		if entry.Note != nil && entry.Note.Text != "" {
+			<div class="pl-14 pr-4 py-2">
+				<p class="text-retro-dark whitespace-pre-wrap notebook-text">{ entry.Note.Text }</p>
+			</div>
+		}
+
+		<!-- Images -->
+		if len(entry.Images) > 0 {
+			<div class="mt-4 pt-4 border-t-2 border-dashed border-primary-200">
+				<div class="flex items-center gap-2 mb-2">
+					<svg class="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+					</svg>
+					<span class="text-sm text-gray-500">صور اليوم ({ fmt.Sprintf("%d", len(entry.Images)) })</span>
+				</div>
+				<div
+					class="flex flex-wrap gap-2"
+					x-data="{ lightbox: false, currentIndex: 0, images: [] }"
+					x-init={ initImagesData(entry.Images) }
+				>
+					for i, img := range entry.Images {
+						<img
+							src={ img.ThumbnailPath }
+							alt="صورة"
+							class="w-16 h-16 object-cover rounded-lg cursor-pointer border-2 border-primary-200 hover:border-primary-500 transition-colors"
+							@click={ fmt.Sprintf("lightbox = true; currentIndex = %d", i) }
+						/>
+					}
+
+					<!-- Lightbox Modal -->
+					<template x-teleport="body">
+						<div
+							x-show="lightbox"
+							x-cloak
+							@keydown.escape.window="lightbox = false"
+							@click="lightbox = false"
+							style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 9999;"
+						>
+							<!-- Close Button -->
+							<button
+								@click.stop="lightbox = false"
+								style="position: absolute; top: 16px; right: 16px; width: 44px; height: 44px; background: white; border: 2px solid #dc2626; border-radius: 50%; font-size: 24px; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;"
+							>
+								×
+							</button>
+
+							<!-- Counter -->
+							if len(entry.Images) > 1 {
+								<div style="position: absolute; top: 16px; left: 16px; background: white; color: #333; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; z-index: 10;">
+									<span x-text="currentIndex + 1"></span> / { fmt.Sprintf("%d", len(entry.Images)) }
+								</div>
+							}
+
+							<!-- Left Arrow -->
+							if len(entry.Images) > 1 {
+								<button
+									@click.stop="currentIndex = (currentIndex - 1 + images.length) % images.length"
+									style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; background: white; border-radius: 50%; font-size: 24px; color: #333; cursor: pointer; border: none; z-index: 10;"
+								>
+									›
+								</button>
+							}
+
+							<!-- Right Arrow -->
+							if len(entry.Images) > 1 {
+								<button
+									@click.stop="currentIndex = (currentIndex + 1) % images.length"
+									style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; background: white; border-radius: 50%; font-size: 24px; color: #333; cursor: pointer; border: none; z-index: 10;"
+								>
+									‹
+								</button>
+							}
+
+							<!-- Image -->
+							<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 70px 60px 20px 60px;">
+								<img
+									:src="images[currentIndex]"
+									@click.stop
+									style="max-height: 100%; max-width: 100%; object-fit: contain; border-radius: 8px;"
+								/>
+							</div>
+						</div>
+					</template>
+				</div>
+			</div>
+		}
+
+		<!-- Todos -->
+		if len(entry.Todos) > 0 {
+			<div class="mt-4 pt-4 border-t-2 border-dashed border-primary-200">
+				<div class="flex items-center gap-2 mb-2">
+					<svg class="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+					</svg>
+					<span class="text-sm text-gray-500">مهام اليوم</span>
+				</div>
+				<div class="space-y-1">
+					for _, todo := range entry.Todos {
+						<div class="flex items-center gap-2">
+							if todo.Completed {
+								<svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+									<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+								</svg>
+								<span class="text-sm text-gray-500 line-through">{ todo.Text }</span>
+							} else {
+								<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<circle cx="12" cy="12" r="10" stroke-width="2"/>
+								</svg>
+								<span class="text-sm text-gray-600">{ todo.Text }</span>
+							}
+						</div>
+					}
+				</div>
+			</div>
+		}
+	</div>
+}
+
+func getPrevMonth(year, month int) string {
+	if month == 1 {
+		return fmt.Sprintf("%d&month=%d", year-1, 12)
+	}
+	return fmt.Sprintf("%d&month=%d", year, month-1)
+}
+
+func getNextMonth(year, month int) string {
+	if month == 12 {
+		return fmt.Sprintf("%d&month=%d", year+1, 1)
+	}
+	return fmt.Sprintf("%d&month=%d", year, month+1)
+}
+
+func imagesToJSON(images []database.DailyImage) string {
+	result := "["
+	for i, img := range images {
+		if i > 0 {
+			result += ","
+		}
+		result += fmt.Sprintf(`"%s"`, img.OriginalPath)
+	}
+	result += "]"
+	return result
+}
+
+func initImagesData(images []database.DailyImage) string {
+	paths := "["
+	for i, img := range images {
+		if i > 0 {
+			paths += ","
+		}
+		paths += fmt.Sprintf(`"%s"`, img.OriginalPath)
+	}
+	paths += "]"
+	return fmt.Sprintf("images = %s", paths)
+}

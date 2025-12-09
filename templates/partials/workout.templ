@@ -86,8 +86,8 @@ templ WorkoutSection(workouts []database.Workout, log *database.WorkoutLog, date
 					name="cardio_minutes"
 					class="retro-input w-full mt-1 text-sm md:text-base"
 					placeholder="٠"
-					if log != nil && log.Cardio != nil {
-						value={ fmt.Sprintf("%d", log.Cardio.Minutes) }
+					if log != nil && len(log.Cardio) > 0 {
+						value={ fmt.Sprintf("%d", log.Cardio[0].Minutes) }
 					}
 				/>
 			</div>
@@ -99,20 +99,14 @@ templ WorkoutSection(workouts []database.Workout, log *database.WorkoutLog, date
 			name="cardio_name"
 			class="retro-input w-full mb-3 md:mb-4 text-sm md:text-base"
 			placeholder="نوع الكارديو (مثال: مشي، جري)"
-			if log != nil && log.Cardio != nil {
-				value={ log.Cardio.Name }
+			if log != nil && len(log.Cardio) > 0 {
+				value={ log.Cardio[0].Name }
 			}
 		/>
 
 		<button type="submit" class="anime-btn w-full py-2.5 md:py-3 text-sm md:text-base">
 			💪 حفظ التمرين
 		</button>
-
-		if log != nil {
-			<p class="text-xs md:text-sm text-primary-600 mt-2 text-center">
-				تم حفظ تمرين اليوم ✓
-			</p>
-		}
 	</form>
 }
 

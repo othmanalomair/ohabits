@@ -21,7 +21,7 @@ templ TodosList(todos []database.Todo, date time.Time) {
 templ TodoItem(todo database.Todo, date time.Time, completed bool) {
 	<div
 		id={ "todo-" + todo.ID.String() }
-		class="flex items-center gap-2 md:gap-3 p-2 hover:bg-cream-100 rounded-lg transition-colors"
+		class={ "flex items-center gap-2 md:gap-3 p-2 rounded-lg transition-colors", templ.KV("bg-red-50 border border-red-200", todo.IsOverdue), templ.KV("hover:bg-cream-100", !todo.IsOverdue) }
 	>
 		<form
 			hx-post={ "/todos/" + todo.ID.String() + "/toggle" }
@@ -38,9 +38,16 @@ templ TodoItem(todo database.Todo, date time.Time, completed bool) {
 			</button>
 		</form>
 
-		<span class={ "flex-1 text-sm md:text-base", templ.KV("line-through text-gray-400", completed), templ.KV("text-retro-dark font-medium", !completed) }>
-			{ todo.Text }
-		</span>
+		<div class="flex-1 min-w-0">
+			<span class={ "block text-sm md:text-base", templ.KV("line-through text-gray-400", completed), templ.KV("text-retro-dark font-medium", !completed) }>
+				{ todo.Text }
+			</span>
+			if todo.IsOverdue {
+				<span class="text-xs text-red-500 font-medium">
+					متأخرة من { formatArabicDate(todo.Date) }
+				</span>
+			}
+		</div>
 
 		<form
 			hx-delete={ "/todos/" + todo.ID.String() }
@@ -57,4 +64,9 @@ templ TodoItem(todo database.Todo, date time.Time, completed bool) {
 			</button>
 		</form>
 	</div>
+}
+
+func formatArabicDate(t time.Time) string {
+	months := []string{"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"}
+	return t.Format("2") + " " + months[t.Month()-1]
 }

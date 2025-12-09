@@ -124,45 +124,6 @@ templ habitsSection(habits []database.HabitWithCompletion, date time.Time) {
 		<div id="habits-list">
 			@partials.HabitsList(habits, date)
 		</div>
-
-		<!-- Add Habit Form -->
-		<form
-			hx-post="/habits"
-			hx-target="#habits-list"
-			hx-swap="innerHTML"
-			class="mt-3 md:mt-4 pt-3 md:pt-4 border-t-2 border-primary-200"
-			x-data="{ showForm: false }"
-		>
-			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
-
-			<button type="button" @click="showForm = !showForm" class="text-primary-600 font-semibold text-sm">
-				+ إضافة عادة جديدة
-			</button>
-
-			<div x-show="showForm" x-transition class="mt-3 space-y-3">
-				<input
-					type="text"
-					name="name"
-					placeholder="اسم العادة"
-					class="retro-input w-full text-sm md:text-base"
-					required
-				/>
-
-				<!-- Days Selection -->
-				<div class="flex flex-wrap gap-1.5 md:gap-2">
-					for i, day := range []string{"أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"} {
-						<label class="flex items-center gap-1 text-xs md:text-sm bg-cream-100 px-2 py-1 rounded-lg cursor-pointer hover:bg-primary-100">
-							<input type="checkbox" name={ fmt.Sprintf("day_%d", i) } class="w-3.5 h-3.5 md:w-4 md:h-4"/>
-							<span>{ day }</span>
-						</label>
-					}
-				</div>
-
-				<button type="submit" class="anime-btn px-4 py-2 text-sm">
-					إضافة
-				</button>
-			</div>
-		</form>
 	</div>
 }
 
@@ -173,40 +134,6 @@ templ medicationsSection(medications []database.MedicationWithLog, date time.Tim
 		<div id="medications-list">
 			@partials.MedicationsList(medications, date)
 		</div>
-
-		<!-- Add Medication Form -->
-		<form
-			hx-post="/medications"
-			hx-target="#medications-list"
-			hx-swap="innerHTML"
-			class="mt-3 md:mt-4 pt-3 md:pt-4 border-t-2 border-primary-200"
-			x-data="{ showForm: false }"
-		>
-			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
-
-			<button type="button" @click="showForm = !showForm" class="text-primary-600 font-semibold text-sm">
-				+ إضافة دواء جديد
-			</button>
-
-			<div x-show="showForm" x-transition class="mt-3 space-y-3">
-				<input
-					type="text"
-					name="name"
-					placeholder="اسم الدواء"
-					class="retro-input w-full text-sm md:text-base"
-					required
-				/>
-				<input
-					type="text"
-					name="dosage"
-					placeholder="الجرعة (مثال: 500mg)"
-					class="retro-input w-full text-sm md:text-base"
-				/>
-				<button type="submit" class="anime-btn px-4 py-2 text-sm">
-					إضافة
-				</button>
-			</div>
-		</form>
 	</div>
 }
 

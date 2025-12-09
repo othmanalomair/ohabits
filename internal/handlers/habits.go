@@ -6,11 +6,29 @@ import (
 	"time"
 
 	"ohabits/internal/middleware"
+	"ohabits/templates/pages"
 	"ohabits/templates/partials"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
+
+// HabitsPage renders the habits management page
+func (h *Handler) HabitsPage(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.Redirect(http.StatusSeeOther, "/login")
+	}
+
+	user, err := h.DB.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		return c.Redirect(http.StatusSeeOther, "/login")
+	}
+
+	habits, _ := h.DB.GetHabitsByUserID(c.Request().Context(), userID)
+
+	return Render(c, http.StatusOK, pages.HabitsPage(user, habits))
+}
 
 // ToggleHabit toggles habit completion
 func (h *Handler) ToggleHabit(c echo.Context) error {
@@ -77,11 +95,33 @@ func (h *Handler) CreateHabit(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 
-	// Return updated habits list
+	c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"habit_saved","type":"success"}}`)
+
+	// Check if request is from habits management page
+	referer := c.Request().Referer()
+	if len(referer) >= 7 && contains(referer, "/habits") {
+		habits, _ := h.DB.GetHabitsByUserID(c.Request().Context(), userID)
+		return Render(c, http.StatusOK, pages.HabitsManageList(habits))
+	}
+
+	// Return updated habits list for dashboard
 	date := time.Now()
 	habits, _ := h.DB.GetHabitsForDay(c.Request().Context(), userID, date)
 
 	return Render(c, http.StatusOK, partials.HabitsList(habits, date))
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // DeleteHabit deletes a habit
@@ -101,9 +141,61 @@ func (h *Handler) DeleteHabit(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 
-	// Return updated habits list
+	// Check if request is from habits management page
+	if c.Request().Header.Get("HX-Current-URL") != "" &&
+	   (c.Request().Header.Get("HX-Current-URL") == "/habits" ||
+	    len(c.Request().Header.Get("HX-Current-URL")) > 7 && c.Request().Header.Get("HX-Current-URL")[:7] == "/habits") {
+		habits, _ := h.DB.GetHabitsByUserID(c.Request().Context(), userID)
+		c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"habit_deleted","type":"success"}}`)
+		return Render(c, http.StatusOK, pages.HabitsManageList(habits))
+	}
+
+	// Return updated habits list for dashboard
 	date := time.Now()
 	habits, _ := h.DB.GetHabitsForDay(c.Request().Context(), userID, date)
 
 	return Render(c, http.StatusOK, partials.HabitsList(habits, date))
+}
+
+// UpdateHabit updates a habit
+func (h *Handler) UpdateHabit(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "غير مصرح"})
+	}
+
+	habitIDStr := c.Param("id")
+	habitID, err := uuid.Parse(habitIDStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "معرف غير صالح"})
+	}
+
+	name := c.FormValue("name")
+	if name == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "الاسم مطلوب"})
+	}
+
+	// Parse scheduled days from form
+	var scheduledDays []string
+	for i := 0; i < 7; i++ {
+		if c.FormValue("day_"+strconv.Itoa(i)) == "on" {
+			scheduledDays = append(scheduledDays, dayNames[i])
+		}
+	}
+
+	if err := h.DB.UpdateHabit(c.Request().Context(), habitID, name, scheduledDays); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
+	}
+
+	c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"habit_saved","type":"success"}}`)
+
+	// Get updated habit and return
+	habits, _ := h.DB.GetHabitsByUserID(c.Request().Context(), userID)
+	for _, habit := range habits {
+		if habit.ID == habitID {
+			return Render(c, http.StatusOK, pages.HabitManageItem(habit))
+		}
+	}
+
+	return c.NoContent(http.StatusOK)
 }

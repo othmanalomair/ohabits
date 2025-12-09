@@ -8,14 +8,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// weekdayToEnglish maps Go weekday to English day name (matching database format)
+var weekdayToEnglish = map[time.Weekday]string{
+	time.Sunday:    "Sunday",
+	time.Monday:    "Monday",
+	time.Tuesday:   "Tuesday",
+	time.Wednesday: "Wednesday",
+	time.Thursday:  "Thursday",
+	time.Friday:    "Friday",
+	time.Saturday:  "Saturday",
+}
+
 // GetMedicationsForDay retrieves active medications for a specific day with log status
 func (db *DB) GetMedicationsForDay(ctx context.Context, userID uuid.UUID, date time.Time) ([]MedicationWithLog, error) {
-	dayOfWeek := int(date.Weekday())
+	dayName := weekdayToEnglish[date.Weekday()]
 	dateStr := date.Format("2006-01-02")
 
 	rows, err := db.Pool.Query(ctx, `
 		SELECT m.id, m.user_id, m.name, m.dosage, m.scheduled_days, m.times_per_day,
-			   m.duration_type, m.start_date, m.end_date, m.notes, m.is_active,
+			   m.duration_type, m.start_date, m.end_date, COALESCE(m.notes, '') as notes, m.is_active,
 			   m.created_at, m.updated_at,
 			   COALESCE(ml.taken, false) as taken
 		FROM medications m
@@ -44,7 +55,7 @@ func (db *DB) GetMedicationsForDay(ctx context.Context, userID uuid.UUID, date t
 		// Check if medication is scheduled for this day
 		isScheduled := len(m.ScheduledDays) == 0 // Empty means every day
 		for _, day := range m.ScheduledDays {
-			if day == dayOfWeek {
+			if day == dayName {
 				isScheduled = true
 				break
 			}
@@ -72,7 +83,7 @@ func (db *DB) GetMedicationsForDay(ctx context.Context, userID uuid.UUID, date t
 func (db *DB) GetAllMedications(ctx context.Context, userID uuid.UUID) ([]Medication, error) {
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, user_id, name, dosage, scheduled_days, times_per_day,
-			   duration_type, start_date, end_date, notes, is_active,
+			   duration_type, start_date, end_date, COALESCE(notes, '') as notes, is_active,
 			   created_at, updated_at
 		FROM medications WHERE user_id = $1
 		ORDER BY created_at
@@ -101,7 +112,7 @@ func (db *DB) GetAllMedications(ctx context.Context, userID uuid.UUID) ([]Medica
 }
 
 // CreateMedication creates a new medication
-func (db *DB) CreateMedication(ctx context.Context, userID uuid.UUID, name, dosage string, scheduledDays []int, timesPerDay int, durationType string, startDate, endDate *time.Time, notes string) (*Medication, error) {
+func (db *DB) CreateMedication(ctx context.Context, userID uuid.UUID, name, dosage string, scheduledDays []string, timesPerDay int, durationType string, startDate, endDate *time.Time, notes string) (*Medication, error) {
 	daysJSON, _ := json.Marshal(scheduledDays)
 
 	var m Medication
@@ -109,7 +120,7 @@ func (db *DB) CreateMedication(ctx context.Context, userID uuid.UUID, name, dosa
 	err := db.Pool.QueryRow(ctx, `
 		INSERT INTO medications (user_id, name, dosage, scheduled_days, times_per_day, duration_type, start_date, end_date, notes)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, user_id, name, dosage, scheduled_days, times_per_day, duration_type, start_date, end_date, notes, is_active, created_at, updated_at
+		RETURNING id, user_id, name, dosage, scheduled_days, times_per_day, duration_type, start_date, end_date, COALESCE(notes, '') as notes, is_active, created_at, updated_at
 	`, userID, name, dosage, daysJSON, timesPerDay, durationType, startDate, endDate, notes).Scan(
 		&m.ID, &m.UserID, &m.Name, &m.Dosage, &daysBytes, &m.TimesPerDay,
 		&m.DurationType, &m.StartDate, &m.EndDate, &m.Notes, &m.IsActive,
@@ -158,4 +169,43 @@ func (db *DB) ToggleMedicationLog(ctx context.Context, userID, medicationID uuid
 func (db *DB) DeleteMedication(ctx context.Context, medicationID uuid.UUID) error {
 	_, err := db.Pool.Exec(ctx, `DELETE FROM medications WHERE id = $1`, medicationID)
 	return err
+}
+
+// UpdateMedication updates a medication
+func (db *DB) UpdateMedication(ctx context.Context, medicationID uuid.UUID, name, dosage string, scheduledDays []string, timesPerDay int, durationType string, startDate, endDate *time.Time, notes string, isActive bool) error {
+	daysJSON, _ := json.Marshal(scheduledDays)
+
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE medications
+		SET name = $2, dosage = $3, scheduled_days = $4, times_per_day = $5,
+		    duration_type = $6, start_date = $7, end_date = $8, notes = $9,
+		    is_active = $10, updated_at = now()
+		WHERE id = $1
+	`, medicationID, name, dosage, daysJSON, timesPerDay, durationType, startDate, endDate, notes, isActive)
+
+	return err
+}
+
+// GetMedicationByID retrieves a single medication by ID
+func (db *DB) GetMedicationByID(ctx context.Context, medicationID uuid.UUID) (*Medication, error) {
+	var m Medication
+	var daysJSON []byte
+
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id, user_id, name, dosage, scheduled_days, times_per_day,
+			   duration_type, start_date, end_date, COALESCE(notes, '') as notes, is_active,
+			   created_at, updated_at
+		FROM medications WHERE id = $1
+	`, medicationID).Scan(
+		&m.ID, &m.UserID, &m.Name, &m.Dosage, &daysJSON, &m.TimesPerDay,
+		&m.DurationType, &m.StartDate, &m.EndDate, &m.Notes, &m.IsActive,
+		&m.CreatedAt, &m.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	json.Unmarshal(daysJSON, &m.ScheduledDays)
+	return &m, nil
 }

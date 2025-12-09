@@ -65,12 +65,16 @@ func main() {
 	protected.GET("/", h.Dashboard)
 
 	// Habits
+	protected.GET("/habits", h.HabitsPage)
 	protected.POST("/habits", h.CreateHabit)
+	protected.PUT("/habits/:id", h.UpdateHabit)
 	protected.POST("/habits/:id/toggle", h.ToggleHabit)
 	protected.DELETE("/habits/:id", h.DeleteHabit)
 
 	// Medications
+	protected.GET("/medications", h.MedicationsPage)
 	protected.POST("/medications", h.CreateMedication)
+	protected.PUT("/medications/:id", h.UpdateMedication)
 	protected.POST("/medications/:id/toggle", h.ToggleMedication)
 	protected.DELETE("/medications/:id", h.DeleteMedication)
 
@@ -82,12 +86,18 @@ func main() {
 	// Notes & Mood
 	protected.POST("/notes", h.SaveNote)
 	protected.POST("/mood", h.SaveMood)
+	protected.GET("/daily-notes", h.DailyNotesPage)
 
 	// Images
 	protected.POST("/images", h.UploadImages)
 	protected.DELETE("/images/:id", h.DeleteImage)
 
 	// Workouts
+	protected.GET("/workouts", h.WorkoutsPage)
+	protected.POST("/workouts", h.CreateWorkout)
+	protected.PUT("/workouts/:id", h.UpdateWorkout)
+	protected.DELETE("/workouts/:id", h.DeleteWorkout)
+	protected.POST("/workouts/reorder", h.ReorderWorkouts)
 	protected.POST("/workout-log", h.SaveWorkoutLog)
 
 	// Start server

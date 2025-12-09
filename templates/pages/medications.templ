@@ -1,0 +1,436 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"ohabits/internal/database"
+	"ohabits/templates/layouts"
+)
+
+templ MedicationsPage(user *database.User, medications []database.Medication) {
+	@layouts.Base("إدارة الأدوية", user) {
+		<div class="max-w-2xl mx-auto space-y-4">
+			<!-- Header -->
+			<div class="retro-card p-4 md:p-5">
+				<div class="flex items-center justify-between mb-4">
+					<h1 class="text-xl md:text-2xl font-bold text-retro-dark">إدارة الأدوية</h1>
+					<a href="/" class="anime-btn px-3 py-1.5 text-sm">
+						← الرجوع
+					</a>
+				</div>
+				<p class="text-sm text-gray-600">أضف أدوية جديدة أو عدّل على الأدوية الموجودة</p>
+			</div>
+
+			<!-- Add New Medication Form -->
+			<div class="retro-card p-4 md:p-5">
+				<h2 class="section-title text-lg mb-4">إضافة دواء جديد</h2>
+
+				<form
+					hx-post="/medications"
+					hx-target="#medications-list"
+					hx-swap="innerHTML"
+					hx-on::after-request="if(event.detail.successful) this.reset()"
+					class="space-y-4"
+					x-data="{ durationType: 'lifetime' }"
+				>
+					<div class="grid grid-cols-2 gap-3">
+						<div class="col-span-2">
+							<label class="block text-sm font-semibold text-primary-700 mb-1">اسم الدواء</label>
+							<input
+								type="text"
+								name="name"
+								placeholder="مثال: فيتامين د"
+								class="retro-input w-full"
+								required
+							/>
+						</div>
+
+						<div>
+							<label class="block text-sm font-semibold text-primary-700 mb-1">الجرعة</label>
+							<input
+								type="text"
+								name="dosage"
+								placeholder="مثال: 1000 وحدة"
+								class="retro-input w-full"
+							/>
+						</div>
+
+						<div>
+							<label class="block text-sm font-semibold text-primary-700 mb-1">مرات باليوم</label>
+							<select name="times_per_day" class="retro-input w-full">
+								<option value="1">مرة واحدة</option>
+								<option value="2">مرتين</option>
+								<option value="3">3 مرات</option>
+								<option value="4">4 مرات</option>
+							</select>
+						</div>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-2">أيام الدواء</label>
+						<div class="flex flex-wrap gap-2">
+							@medDayCheckbox("0", "أحد", true)
+							@medDayCheckbox("1", "اثنين", true)
+							@medDayCheckbox("2", "ثلاثاء", true)
+							@medDayCheckbox("3", "أربعاء", true)
+							@medDayCheckbox("4", "خميس", true)
+							@medDayCheckbox("5", "جمعة", true)
+							@medDayCheckbox("6", "سبت", true)
+						</div>
+						<p class="text-xs text-gray-500 mt-1">اترك الكل محدد للدواء اليومي</p>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-2">مدة الدواء</label>
+						<div class="flex gap-4">
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input
+									type="radio"
+									name="duration_type"
+									value="lifetime"
+									x-model="durationType"
+									class="w-4 h-4 text-primary-600"
+									checked
+								/>
+								<span class="text-sm">مستمر (مدى الحياة)</span>
+							</label>
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input
+									type="radio"
+									name="duration_type"
+									value="limited"
+									x-model="durationType"
+									class="w-4 h-4 text-primary-600"
+								/>
+								<span class="text-sm">محدود المدة</span>
+							</label>
+						</div>
+					</div>
+
+					<div x-show="durationType === 'limited'" x-transition class="grid grid-cols-2 gap-3">
+						<div>
+							<label class="block text-sm font-semibold text-primary-700 mb-1">تاريخ البداية</label>
+							<input
+								type="date"
+								name="start_date"
+								class="retro-input w-full"
+							/>
+						</div>
+						<div>
+							<label class="block text-sm font-semibold text-primary-700 mb-1">تاريخ النهاية</label>
+							<input
+								type="date"
+								name="end_date"
+								class="retro-input w-full"
+							/>
+						</div>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-1">ملاحظات</label>
+						<textarea
+							name="notes"
+							placeholder="ملاحظات إضافية (اختياري)"
+							class="retro-input w-full h-20 resize-none"
+						></textarea>
+					</div>
+
+					<button type="submit" class="anime-btn w-full py-2.5">
+						+ إضافة الدواء
+					</button>
+				</form>
+			</div>
+
+			<!-- Medications List -->
+			<div class="retro-card p-4 md:p-5">
+				<h2 class="section-title text-lg mb-4">الأدوية الحالية ({ fmt.Sprintf("%d", len(medications)) })</h2>
+
+				<div id="medications-list">
+					@MedicationsManageList(medications)
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ MedicationsManageList(medications []database.Medication) {
+	if len(medications) == 0 {
+		<p class="text-gray-400 text-center py-8">لا توجد أدوية بعد. أضف دواءك الأول!</p>
+	} else {
+		<div class="space-y-3">
+			for _, med := range medications {
+				@MedicationManageItem(med)
+			}
+		</div>
+	}
+}
+
+templ MedicationManageItem(med database.Medication) {
+	<div
+		id={ "med-manage-" + med.ID.String() }
+		class={ "bg-cream-100 rounded-xl p-4 border-2", templ.KV("border-primary-200", med.IsActive), templ.KV("border-gray-300 opacity-60", !med.IsActive) }
+		x-data="{ editing: false }"
+	>
+		<!-- View Mode -->
+		<div x-show="!editing">
+			<div class="flex items-start justify-between gap-3">
+				<div class="flex-1">
+					<div class="flex items-center gap-2">
+						<h3 class="font-bold text-retro-dark">{ med.Name }</h3>
+						if !med.IsActive {
+							<span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">متوقف</span>
+						}
+					</div>
+					if med.Dosage != "" {
+						<p class="text-sm text-primary-600">{ med.Dosage }</p>
+					}
+					<div class="flex flex-wrap gap-2 mt-2 text-xs text-gray-600">
+						<span class="bg-cream-200 px-2 py-0.5 rounded">{ fmt.Sprintf("%d مرة/يوم", med.TimesPerDay) }</span>
+						if med.DurationType == "lifetime" {
+							<span class="bg-green-100 text-green-700 px-2 py-0.5 rounded">مستمر</span>
+						} else {
+							<span class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded">محدود</span>
+						}
+					</div>
+					if len(med.ScheduledDays) > 0 && len(med.ScheduledDays) < 7 {
+						<div class="flex flex-wrap gap-1 mt-2">
+							for _, day := range med.ScheduledDays {
+								<span class="retro-badge text-xs">{ getMedArabicDayName(day) }</span>
+							}
+						</div>
+					}
+					if med.Notes != "" {
+						<p class="text-xs text-gray-500 mt-2 italic">{ med.Notes }</p>
+					}
+				</div>
+				<div class="flex gap-2">
+					<button
+						@click="editing = true"
+						class="text-primary-600 hover:text-primary-800 p-1"
+						title="تعديل"
+					>
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+						</svg>
+					</button>
+					<button
+						hx-delete={ "/medications/" + med.ID.String() }
+						hx-target="#medications-list"
+						hx-swap="innerHTML"
+						hx-confirm="هل أنت متأكد من حذف هذا الدواء؟"
+						class="text-red-500 hover:text-red-700 p-1"
+						title="حذف"
+					>
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+						</svg>
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Edit Mode -->
+		<div x-show="editing" x-cloak>
+			<form
+				hx-put={ "/medications/" + med.ID.String() }
+				hx-target={ "#med-manage-" + med.ID.String() }
+				hx-swap="outerHTML"
+				class="space-y-3"
+				x-data={ fmt.Sprintf("{ durationType: '%s' }", med.DurationType) }
+			>
+				<div class="grid grid-cols-2 gap-2">
+					<div class="col-span-2">
+						<label class="block text-xs font-semibold text-primary-700 mb-1">اسم الدواء</label>
+						<input
+							type="text"
+							name="name"
+							value={ med.Name }
+							class="retro-input w-full text-sm"
+							required
+						/>
+					</div>
+
+					<div>
+						<label class="block text-xs font-semibold text-primary-700 mb-1">الجرعة</label>
+						<input
+							type="text"
+							name="dosage"
+							value={ med.Dosage }
+							class="retro-input w-full text-sm"
+						/>
+					</div>
+
+					<div>
+						<label class="block text-xs font-semibold text-primary-700 mb-1">مرات باليوم</label>
+						<select name="times_per_day" class="retro-input w-full text-sm">
+							<option value="1" selected?={ med.TimesPerDay == 1 }>مرة واحدة</option>
+							<option value="2" selected?={ med.TimesPerDay == 2 }>مرتين</option>
+							<option value="3" selected?={ med.TimesPerDay == 3 }>3 مرات</option>
+							<option value="4" selected?={ med.TimesPerDay == 4 }>4 مرات</option>
+						</select>
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-semibold text-primary-700 mb-2">أيام الدواء</label>
+					<div class="flex flex-wrap gap-2">
+						@medDayCheckboxEdit("0", "أحد", isMedDaySelected(med.ScheduledDays, "Sunday"))
+						@medDayCheckboxEdit("1", "اثنين", isMedDaySelected(med.ScheduledDays, "Monday"))
+						@medDayCheckboxEdit("2", "ثلاثاء", isMedDaySelected(med.ScheduledDays, "Tuesday"))
+						@medDayCheckboxEdit("3", "أربعاء", isMedDaySelected(med.ScheduledDays, "Wednesday"))
+						@medDayCheckboxEdit("4", "خميس", isMedDaySelected(med.ScheduledDays, "Thursday"))
+						@medDayCheckboxEdit("5", "جمعة", isMedDaySelected(med.ScheduledDays, "Friday"))
+						@medDayCheckboxEdit("6", "سبت", isMedDaySelected(med.ScheduledDays, "Saturday"))
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-semibold text-primary-700 mb-1">مدة الدواء</label>
+					<div class="flex gap-3">
+						<label class="flex items-center gap-1.5 cursor-pointer">
+							<input
+								type="radio"
+								name="duration_type"
+								value="lifetime"
+								x-model="durationType"
+								class="w-3.5 h-3.5 text-primary-600"
+							/>
+							<span class="text-xs">مستمر</span>
+						</label>
+						<label class="flex items-center gap-1.5 cursor-pointer">
+							<input
+								type="radio"
+								name="duration_type"
+								value="limited"
+								x-model="durationType"
+								class="w-3.5 h-3.5 text-primary-600"
+							/>
+							<span class="text-xs">محدود</span>
+						</label>
+					</div>
+				</div>
+
+				<div x-show="durationType === 'limited'" x-transition class="grid grid-cols-2 gap-2">
+					<div>
+						<label class="block text-xs font-semibold text-primary-700 mb-1">البداية</label>
+						<input
+							type="date"
+							name="start_date"
+							value={ formatDateForInput(med.StartDate) }
+							class="retro-input w-full text-sm"
+						/>
+					</div>
+					<div>
+						<label class="block text-xs font-semibold text-primary-700 mb-1">النهاية</label>
+						<input
+							type="date"
+							name="end_date"
+							value={ formatDateForInput(med.EndDate) }
+							class="retro-input w-full text-sm"
+						/>
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-semibold text-primary-700 mb-1">ملاحظات</label>
+					<textarea
+						name="notes"
+						class="retro-input w-full h-16 resize-none text-sm"
+					>{ med.Notes }</textarea>
+				</div>
+
+				<div>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input
+							type="checkbox"
+							name="is_active"
+							if med.IsActive {
+								checked
+							}
+							class="w-4 h-4 rounded border-primary-300 text-primary-600"
+						/>
+						<span class="text-sm text-retro-dark">الدواء فعال</span>
+					</label>
+				</div>
+
+				<div class="flex gap-2 pt-2">
+					<button type="submit" class="anime-btn flex-1 py-2 text-sm">
+						حفظ التعديلات
+					</button>
+					<button
+						type="button"
+						@click="editing = false"
+						class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 bg-gray-100 rounded-lg"
+					>
+						إلغاء
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+templ medDayCheckbox(index string, label string, checked bool) {
+	<label class="flex items-center gap-1.5 cursor-pointer">
+		<input
+			type="checkbox"
+			name={ "day_" + index }
+			if checked {
+				checked
+			}
+			class="w-4 h-4 rounded border-primary-300 text-primary-600 focus:ring-primary-500"
+		/>
+		<span class="text-sm text-retro-dark">{ label }</span>
+	</label>
+}
+
+templ medDayCheckboxEdit(index string, label string, checked bool) {
+	<label class="flex items-center gap-1.5 cursor-pointer">
+		<input
+			type="checkbox"
+			name={ "day_" + index }
+			if checked {
+				checked
+			}
+			class="w-4 h-4 rounded border-primary-300 text-primary-600 focus:ring-primary-500"
+		/>
+		<span class="text-xs text-retro-dark">{ label }</span>
+	</label>
+}
+
+func getMedArabicDayName(day string) string {
+	days := map[string]string{
+		"Sunday":    "أحد",
+		"Monday":    "اثنين",
+		"Tuesday":   "ثلاثاء",
+		"Wednesday": "أربعاء",
+		"Thursday":  "خميس",
+		"Friday":    "جمعة",
+		"Saturday":  "سبت",
+	}
+	if name, ok := days[day]; ok {
+		return name
+	}
+	return day
+}
+
+func isMedDaySelected(days []string, day string) bool {
+	// If no days selected, all days are selected (daily medication)
+	if len(days) == 0 {
+		return true
+	}
+	for _, d := range days {
+		if d == day {
+			return true
+		}
+	}
+	return false
+}
+
+func formatDateForInput(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format("2006-01-02")
+}

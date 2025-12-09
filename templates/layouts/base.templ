@@ -12,6 +12,7 @@ templ Base(title string, user *database.User) {
 		<link rel="stylesheet" href="/static/css/app.css"/>
 		<script src="/static/js/htmx.min.js"></script>
 		<script defer src="/static/js/alpine.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 	</head>
 	<body class="min-h-screen" x-data="{ menuOpen: false }">
 		<!-- Header -->
@@ -88,12 +89,11 @@ templ Base(title string, user *database.User) {
 
 				<div class="space-y-2">
 					@menuItem("/", "الرئيسية", homeIcon())
+					@menuItem("/daily-notes", "مذكرة اليوم", noteIcon())
+					@menuItem("/blog", "المدونة", blogIcon())
 					@menuItem("/habits", "العادات", habitIcon())
 					@menuItem("/medications", "الأدوية", medicationIcon())
 					@menuItem("/workouts", "التمارين", workoutIcon())
-					@menuItem("/shows", "المسلسلات", showIcon())
-					@menuItem("/projects", "المشاريع", projectIcon())
-					@menuItem("/notes", "الملاحظات", noteIcon())
 					@menuItem("/profile", "الملف الشخصي", profileIcon())
 
 					<hr class="my-4 border-primary-200"/>
@@ -111,19 +111,6 @@ templ Base(title string, user *database.User) {
 			{ children... }
 		</main>
 
-		<!-- Bottom Navigation for Mobile -->
-		<nav class="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-primary-500 md:hidden z-30" style="box-shadow: 0 -4px 0 #C2410C;">
-			<div class="flex justify-around py-2">
-				@bottomNavItem("/", "الرئيسية", true)
-				@bottomNavItem("/projects", "المشاريع", false)
-				@bottomNavItem("/notes", "الملاحظات", false)
-				@bottomNavItem("/profile", "الملف", false)
-			</div>
-		</nav>
-
-		<!-- Spacer for bottom nav -->
-		<div class="h-20 md:hidden"></div>
-
 		<!-- Toast Container - Top of screen (above header z-50) -->
 		<div id="toast-container" style="position: fixed; top: 70px; right: 16px; width: 280px; z-index: 9999;"></div>
 
@@ -134,8 +121,14 @@ templ Base(title string, user *database.User) {
 				'mood_saved': 'تم حفظ المزاج ✓',
 				'save_error': 'حدث خطأ في الحفظ',
 				'habit_saved': 'تم حفظ العادة ✓',
+				'habit_deleted': 'تم حذف العادة',
 				'todo_saved': 'تم حفظ المهمة ✓',
-				'images_saved': 'تم حفظ الصور ✓'
+				'images_saved': 'تم حفظ الصور ✓',
+				'workout_saved': 'تم حفظ التمرين 💪',
+				'workout_deleted': 'تم حذف التمرين',
+				'workout_reordered': 'تم إعادة ترتيب التمارين ✓',
+				'med_saved': 'تم حفظ الدواء 💊',
+				'med_deleted': 'تم حذف الدواء'
 			};
 
 			function showToast(message, type) {
@@ -216,18 +209,6 @@ templ menuItem(href string, label string, icon templ.Component) {
 	</a>
 }
 
-templ bottomNavItem(href string, label string, active bool) {
-	<a
-		href={ templ.SafeURL(href) }
-		class={ "flex flex-col items-center p-2", templ.KV("text-primary-600", active), templ.KV("text-gray-400", !active) }
-	>
-		<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-			<path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
-		</svg>
-		<span class="text-xs font-bold">{ label }</span>
-	</a>
-}
-
 // Icons
 templ homeIcon() {
 	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -253,23 +234,16 @@ templ workoutIcon() {
 	</svg>
 }
 
-templ showIcon() {
-	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-		<path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
-		<path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd"/>
-	</svg>
-}
-
-templ projectIcon() {
-	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-		<path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
-		<path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
-	</svg>
-}
-
 templ noteIcon() {
 	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
 		<path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+	</svg>
+}
+
+templ blogIcon() {
+	<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+		<path fill-rule="evenodd" d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2z" clip-rule="evenodd"/>
+		<path d="M15 7h1a2 2 0 012 2v5.5a1.5 1.5 0 01-3 0V7z"/>
 	</svg>
 }
 

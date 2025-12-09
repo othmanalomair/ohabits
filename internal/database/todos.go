@@ -7,15 +7,17 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetTodosForDay retrieves todos for a specific day
+// GetTodosForDay retrieves todos for a specific day plus overdue incomplete todos
 func (db *DB) GetTodosForDay(ctx context.Context, userID uuid.UUID, date time.Time) ([]Todo, error) {
 	dateStr := date.Format("2006-01-02")
 
+	// Get todos for this day OR overdue incomplete todos from past days
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, text, completed, date, created_at
+		SELECT id, user_id, text, completed, date, created_at,
+			   (date < $2 AND completed = false) as is_overdue
 		FROM todos
-		WHERE user_id = $1 AND date = $2
-		ORDER BY created_at
+		WHERE user_id = $1 AND (date = $2 OR (date < $2 AND completed = false))
+		ORDER BY is_overdue DESC, date ASC, created_at ASC
 	`, userID, dateStr)
 	if err != nil {
 		return nil, err
@@ -25,7 +27,7 @@ func (db *DB) GetTodosForDay(ctx context.Context, userID uuid.UUID, date time.Ti
 	var todos []Todo
 	for rows.Next() {
 		var t Todo
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.Completed, &t.Date, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.Completed, &t.Date, &t.CreatedAt, &t.IsOverdue); err != nil {
 			return nil, err
 		}
 		todos = append(todos, t)
@@ -40,8 +42,8 @@ func (db *DB) CreateTodo(ctx context.Context, userID uuid.UUID, text string, dat
 
 	var t Todo
 	err := db.Pool.QueryRow(ctx, `
-		INSERT INTO todos (user_id, text, date)
-		VALUES ($1, $2, $3)
+		INSERT INTO todos (user_id, text, completed, date)
+		VALUES ($1, $2, false, $3)
 		RETURNING id, user_id, text, completed, date, created_at
 	`, userID, text, dateStr).Scan(&t.ID, &t.UserID, &t.Text, &t.Completed, &t.Date, &t.CreatedAt)
 
@@ -74,4 +76,31 @@ func (db *DB) DeleteTodo(ctx context.Context, todoID uuid.UUID) error {
 func (db *DB) UpdateTodo(ctx context.Context, todoID uuid.UUID, text string) error {
 	_, err := db.Pool.Exec(ctx, `UPDATE todos SET text = $2 WHERE id = $1`, todoID, text)
 	return err
+}
+
+// GetTodosForDayOnly retrieves todos only for a specific day (no overdue)
+func (db *DB) GetTodosForDayOnly(ctx context.Context, userID uuid.UUID, date time.Time) ([]Todo, error) {
+	dateStr := date.Format("2006-01-02")
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, user_id, text, completed, date, created_at, false as is_overdue
+		FROM todos
+		WHERE user_id = $1 AND date = $2
+		ORDER BY created_at ASC
+	`, userID, dateStr)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var todos []Todo
+	for rows.Next() {
+		var t Todo
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Text, &t.Completed, &t.Date, &t.CreatedAt, &t.IsOverdue); err != nil {
+			return nil, err
+		}
+		todos = append(todos, t)
+	}
+
+	return todos, rows.Err()
 }
