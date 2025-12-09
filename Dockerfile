@@ -4,6 +4,9 @@ FROM golang:1.23-alpine AS builder
 # Install build dependencies
 RUN apk add --no-cache git
 
+# Install templ
+RUN go install github.com/a-h/templ/cmd/templ@latest
+
 WORKDIR /app
 
 # Copy go mod files
@@ -12,6 +15,9 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+
+# Generate templ files
+RUN templ generate
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ohabits ./cmd/server
