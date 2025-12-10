@@ -88,6 +88,7 @@ func main() {
 	protected.POST("/notes", h.SaveNote)
 	protected.POST("/mood", h.SaveMood)
 	protected.GET("/daily-notes", h.DailyNotesPage)
+	protected.GET("/notes/search", h.SearchNotes)
 
 	// Images
 	protected.POST("/images", h.UploadImages)

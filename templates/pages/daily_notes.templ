@@ -39,9 +39,41 @@ var arabicDays = map[time.Weekday]string{
 
 templ DailyNotesPage(user *database.User, entries []database.DailyNoteEntry, year int, month int) {
 	@layouts.Base("مذكرة اليوم", user) {
-		<div class="max-w-2xl mx-auto space-y-4">
+		<div class="max-w-2xl mx-auto space-y-4" x-data="{ searching: false, query: '' }">
+			<!-- Search Box -->
+			<div class="retro-card p-4">
+				<div class="flex items-center gap-2">
+					<div class="flex-1">
+						<input
+							type="text"
+							x-model="query"
+							placeholder="ابحث في المذكرات..."
+							class="retro-input w-full text-sm"
+							hx-get="/notes/search"
+							hx-trigger="keyup changed delay:300ms"
+							hx-target="#search-results"
+							hx-swap="innerHTML"
+							name="q"
+							@input="searching = query.length > 0"
+						/>
+					</div>
+					<button
+						x-show="searching"
+						@click="searching = false; query = ''; document.getElementById('search-results').innerHTML = ''"
+						class="p-2 text-gray-500 hover:text-gray-700"
+						type="button"
+					>
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+						</svg>
+					</button>
+				</div>
+				<!-- Search Results -->
+				<div id="search-results" class="mt-4" x-show="searching"></div>
+			</div>
+
 			<!-- Header with Month Navigation -->
-			<div class="retro-card p-4 md:p-5">
+			<div class="retro-card p-4 md:p-5" x-show="!searching">
 				<div class="flex items-center justify-between">
 					<a
 						href={ templ.SafeURL(getPrevMonthURL(year, month)) }
@@ -72,7 +104,7 @@ templ DailyNotesPage(user *database.User, entries []database.DailyNoteEntry, yea
 			</div>
 
 			<!-- Notebook Container -->
-			<div class="notebook-container">
+			<div class="notebook-container" x-show="!searching">
 				if len(entries) == 0 {
 					<div class="retro-card p-8 text-center">
 						<div class="text-6xl mb-4">📓</div>

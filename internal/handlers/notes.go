@@ -4,8 +4,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"ohabits/internal/database"
 	"ohabits/internal/middleware"
 	"ohabits/templates/partials"
 
@@ -73,4 +75,37 @@ func (h *Handler) SaveMood(c echo.Context) error {
 	c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"mood_saved","type":"success"}}`)
 
 	return Render(c, http.StatusOK, partials.MoodSection(mood, date))
+}
+
+// SearchNotes searches notes by text
+func (h *Handler) SearchNotes(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "غير مصرح"})
+	}
+
+	query := strings.TrimSpace(c.QueryParam("q"))
+	if query == "" {
+		return Render(c, http.StatusOK, partials.NotesSearchResults(nil, ""))
+	}
+
+	notes, err := h.DB.SearchNotes(c.Request().Context(), userID, query)
+	if err != nil {
+		log.Printf("SearchNotes error: %v", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ في البحث"})
+	}
+
+	// Build entries with mood data
+	entries := make([]database.DailyNoteEntry, 0, len(notes))
+	for _, note := range notes {
+		entry := database.DailyNoteEntry{
+			Date: note.Date,
+			Note: &note,
+		}
+		// Get mood for this day
+		entry.Mood, _ = h.DB.GetMoodForDay(c.Request().Context(), userID, note.Date)
+		entries = append(entries, entry)
+	}
+
+	return Render(c, http.StatusOK, partials.NotesSearchResults(entries, query))
 }

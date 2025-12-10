@@ -193,3 +193,105 @@ func getMoodData(mood *database.MoodRating) string {
 	}
 	return "{ selected: 0 }"
 }
+
+// Arabic month names for search results
+var arabicMonths = map[time.Month]string{
+	time.January:   "يناير",
+	time.February:  "فبراير",
+	time.March:     "مارس",
+	time.April:     "أبريل",
+	time.May:       "مايو",
+	time.June:      "يونيو",
+	time.July:      "يوليو",
+	time.August:    "أغسطس",
+	time.September: "سبتمبر",
+	time.October:   "أكتوبر",
+	time.November:  "نوفمبر",
+	time.December:  "ديسمبر",
+}
+
+// Arabic day names
+var arabicDays = map[time.Weekday]string{
+	time.Sunday:    "الأحد",
+	time.Monday:    "الإثنين",
+	time.Tuesday:   "الثلاثاء",
+	time.Wednesday: "الأربعاء",
+	time.Thursday:  "الخميس",
+	time.Friday:    "الجمعة",
+	time.Saturday:  "السبت",
+}
+
+// getMoodEmoji returns the emoji for a mood rating
+func getMoodEmoji(rating int) string {
+	switch rating {
+	case 1:
+		return "😢"
+	case 2:
+		return "😕"
+	case 3:
+		return "😐"
+	case 4:
+		return "🙂"
+	case 5:
+		return "😄"
+	default:
+		return ""
+	}
+}
+
+templ NotesSearchResults(entries []database.DailyNoteEntry, query string) {
+	if query == "" {
+		<div class="text-center text-gray-500 py-8">
+			<div class="text-4xl mb-2">🔍</div>
+			<p>ابحث في مذكراتك</p>
+		</div>
+	} else if len(entries) == 0 {
+		<div class="text-center text-gray-500 py-8">
+			<div class="text-4xl mb-2">😕</div>
+			<p>لا توجد نتائج لـ "{ query }"</p>
+		</div>
+	} else {
+		<div class="space-y-3">
+			<p class="text-sm text-gray-500 text-center">
+				{ fmt.Sprintf("%d", len(entries)) } نتيجة
+			</p>
+			for _, entry := range entries {
+				@SearchResultEntry(entry, query)
+			}
+		</div>
+	}
+}
+
+templ SearchResultEntry(entry database.DailyNoteEntry, query string) {
+	<a
+		href={ templ.SafeURL(fmt.Sprintf("/?date=%s", entry.Date.Format("2006-01-02"))) }
+		class="block retro-card p-4 hover:border-primary-500 transition-colors"
+	>
+		<div class="flex items-center justify-between mb-2">
+			<div class="flex items-center gap-2">
+				if entry.Mood != nil {
+					<span class="text-xl">{ getMoodEmoji(entry.Mood.Rating) }</span>
+				}
+				<span class="font-bold text-retro-dark">
+					{ arabicDays[entry.Date.Weekday()] } - { fmt.Sprintf("%d", entry.Date.Day()) } { arabicMonths[entry.Date.Month()] } { fmt.Sprintf("%d", entry.Date.Year()) }
+				</span>
+			</div>
+			<svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+			</svg>
+		</div>
+		if entry.Note != nil && entry.Note.Text != "" {
+			<p class="text-sm text-gray-600 line-clamp-2">
+				{ truncateText(entry.Note.Text, 150) }
+			</p>
+		}
+	</a>
+}
+
+func truncateText(text string, maxLen int) string {
+	runes := []rune(text)
+	if len(runes) <= maxLen {
+		return text
+	}
+	return string(runes[:maxLen]) + "..."
+}

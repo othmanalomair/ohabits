@@ -148,3 +148,30 @@ func (db *DB) GetDatesWithContentForMonth(ctx context.Context, userID uuid.UUID,
 
 	return dates, rows.Err()
 }
+
+// SearchNotes searches for notes containing the query string
+func (db *DB) SearchNotes(ctx context.Context, userID uuid.UUID, query string) ([]Note, error) {
+	searchPattern := "%" + query + "%"
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, user_id, text, date, created_at, updated_at
+		FROM notes
+		WHERE user_id = $1 AND text ILIKE $2
+		ORDER BY date DESC
+	`, userID, searchPattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notes []Note
+	for rows.Next() {
+		var n Note
+		if err := rows.Scan(&n.ID, &n.UserID, &n.Text, &n.Date, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, err
+		}
+		notes = append(notes, n)
+	}
+
+	return notes, rows.Err()
+}

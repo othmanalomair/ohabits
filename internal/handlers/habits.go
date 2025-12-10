@@ -141,12 +141,13 @@ func (h *Handler) DeleteHabit(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 
+	c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"habit_deleted","type":"success"}}`)
+
 	// Check if request is from habits management page
-	if c.Request().Header.Get("HX-Current-URL") != "" &&
-	   (c.Request().Header.Get("HX-Current-URL") == "/habits" ||
-	    len(c.Request().Header.Get("HX-Current-URL")) > 7 && c.Request().Header.Get("HX-Current-URL")[:7] == "/habits") {
+	currentURL := c.Request().Header.Get("HX-Current-URL")
+	referer := c.Request().Referer()
+	if contains(currentURL, "/habits") || contains(referer, "/habits") {
 		habits, _ := h.DB.GetHabitsByUserID(c.Request().Context(), userID)
-		c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"habit_deleted","type":"success"}}`)
 		return Render(c, http.StatusOK, pages.HabitsManageList(habits))
 	}
 
