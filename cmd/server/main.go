@@ -109,6 +109,13 @@ func main() {
 
 	// Blog
 	protected.GET("/blog", h.BlogPage)
+	protected.GET("/blog/search", h.BlogSearch)
+	protected.GET("/blog/new", h.BlogNewPage)
+	protected.GET("/blog/:id", h.BlogViewPage)
+	protected.GET("/blog/:id/edit", h.BlogEditPage)
+	protected.POST("/blog/:id/save", h.BlogSave)
+	protected.DELETE("/blog/:id", h.BlogDelete)
+	protected.POST("/blog/upload-image", h.BlogUploadImage)
 
 	// Start server
 	go func() {

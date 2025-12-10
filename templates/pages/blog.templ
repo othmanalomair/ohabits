@@ -1,48 +1,750 @@
 package pages
 
 import (
+	"fmt"
 	"ohabits/internal/database"
 	"ohabits/templates/layouts"
 )
 
-templ BlogPage(user *database.User) {
+// BlogListPage shows list of all blog posts
+templ BlogListPage(user *database.User, posts []database.MarkdownNote, searchQuery string) {
 	@layouts.Base("المدونة", user) {
-		<div class="max-w-2xl mx-auto">
-			<div class="retro-card p-8 md:p-12 text-center">
-				<!-- Coming Soon Icon -->
-				<div class="mb-6">
-					<svg class="w-24 h-24 mx-auto text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-					</svg>
+		<div class="max-w-4xl mx-auto space-y-4">
+			<!-- Header -->
+			<div class="retro-card p-4 md:p-5">
+				<div class="flex items-center justify-between mb-3">
+					<h1 class="text-xl md:text-2xl font-bold text-retro-dark">المدونة</h1>
+					<a href="/blog/new" class="anime-btn px-4 py-2 text-sm">
+						+ مدونة جديدة
+					</a>
 				</div>
-
-				<!-- Title -->
-				<h1 class="text-3xl md:text-4xl font-extrabold text-primary-600 mb-4" style="text-shadow: 2px 2px 0 #C2410C;">
-					المدونة
-				</h1>
-
-				<!-- Coming Soon Text -->
-				<div class="inline-block bg-gradient-to-r from-primary-100 to-yellow-100 px-6 py-3 rounded-full border-2 border-primary-300 mb-6">
-					<span class="text-xl font-bold text-primary-700">قريباً...</span>
+				<!-- Search -->
+				<div class="relative">
+					<input
+						type="text"
+						name="q"
+						value={ searchQuery }
+						class="retro-input w-full pr-10 text-sm"
+						placeholder="ابحث في المدونات..."
+						dir="rtl"
+						hx-get="/blog/search"
+						hx-trigger="input changed delay:300ms, search"
+						hx-target="#blog-posts"
+						hx-swap="innerHTML"
+						hx-indicator="#search-indicator"
+					/>
+					<div class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+						<svg id="search-indicator" class="w-5 h-5 htmx-indicator animate-spin hidden" fill="none" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+						<svg class="w-5 h-5 search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						</svg>
+					</div>
 				</div>
+			</div>
 
-				<!-- Description -->
-				<p class="text-gray-600 text-lg mb-8 max-w-md mx-auto">
-					نعمل على تجهيز مساحة خاصة لك لكتابة أفكارك ومقالاتك. ترقبوا التحديث القادم!
-				</p>
-
-				<!-- Decorative Elements -->
-				<div class="flex justify-center gap-3 mb-8">
-					<span class="w-3 h-3 bg-primary-400 rounded-full animate-bounce" style="animation-delay: 0s;"></span>
-					<span class="w-3 h-3 bg-primary-500 rounded-full animate-bounce" style="animation-delay: 0.1s;"></span>
-					<span class="w-3 h-3 bg-primary-600 rounded-full animate-bounce" style="animation-delay: 0.2s;"></span>
-				</div>
-
-				<!-- Back Button -->
-				<a href="/" class="anime-btn px-6 py-2.5 inline-block">
-					← العودة للرئيسية
-				</a>
+			<!-- Posts List -->
+			<div id="blog-posts">
+				@BlogPostsList(posts, searchQuery)
 			</div>
 		</div>
+		<style>
+			.htmx-request .search-icon { display: none; }
+			.htmx-request .htmx-indicator { display: block !important; }
+		</style>
 	}
+}
+
+// BlogPostsList shows only the posts list (for HTMX partial updates)
+templ BlogPostsList(posts []database.MarkdownNote, searchQuery string) {
+	if len(posts) == 0 {
+		<div class="retro-card p-8 text-center">
+			<div class="text-6xl mb-4">📝</div>
+			if searchQuery != "" {
+				<p class="text-gray-500 mb-4">لا توجد نتائج للبحث</p>
+			} else {
+				<p class="text-gray-500 mb-4">لا توجد مدونات بعد</p>
+				<a href="/blog/new" class="anime-btn px-6 py-2 inline-block">
+					ابدأ الكتابة
+				</a>
+			}
+		</div>
+	} else {
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+			for _, post := range posts {
+				<a
+					href={ templ.SafeURL(fmt.Sprintf("/blog/%s", post.ID.String())) }
+					class="retro-card p-4 block hover:border-primary-400 transition-colors"
+				>
+					<h2 class="font-bold text-lg text-retro-dark mb-2 line-clamp-1">{ post.Title }</h2>
+					<p class="text-gray-500 text-sm line-clamp-2">{ truncateContent(post.Content, 100) }</p>
+					<div class="flex items-center justify-between mt-3 text-xs text-gray-400">
+						<div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+							<span>أنشئ: { post.CreatedAt.Format("2006/01/02") }</span>
+							<span>تحديث: { post.UpdatedAt.Format("01/02 - 15:04") }</span>
+						</div>
+						<span class="text-primary-500">قراءة ←</span>
+					</div>
+				</a>
+			}
+		</div>
+	}
+}
+
+// BlogEditPage shows the blog editor
+templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
+	@layouts.Base("تحرير المدونة", user) {
+		<div class="max-w-4xl mx-auto" x-data={ initBlogEditor(post) }>
+			<!-- Toolbar -->
+			<div class="retro-card p-3 mb-4 sticky top-0 z-10">
+				<div class="flex items-center justify-between flex-wrap gap-2">
+					<div class="flex items-center gap-2">
+						<a href="/blog" class="text-gray-500 hover:text-primary-500 p-2">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+							</svg>
+						</a>
+						<span class="text-sm text-gray-400" x-text="saveStatus"></span>
+					</div>
+					<div class="flex items-center gap-2">
+						<!-- Formatting buttons -->
+						<button type="button" @click="insertFormat('**', '**')" class="p-2 hover:bg-primary-100 rounded" title="عريض">
+							<span class="font-bold">B</span>
+						</button>
+						<button type="button" @click="insertFormat('*', '*')" class="p-2 hover:bg-primary-100 rounded" title="مائل">
+							<span class="italic">I</span>
+						</button>
+						<button type="button" @click="insertFormat('# ', '')" class="p-2 hover:bg-primary-100 rounded" title="عنوان">
+							<span class="font-bold">H</span>
+						</button>
+						<button type="button" @click="insertFormat('[', '](url)')" class="p-2 hover:bg-primary-100 rounded" title="رابط">
+							🔗
+						</button>
+						<label class="p-2 hover:bg-primary-100 rounded cursor-pointer" title="صورة">
+							📷
+							<input type="file" accept="image/*" class="hidden" @change="uploadImage($event)"/>
+						</label>
+						<div class="w-px h-6 bg-gray-300 mx-1"></div>
+						<button type="button" @click="savePost()" class="anime-btn px-2 py-1.5 text-sm md:px-4">
+							💾 <span class="hidden md:inline">حفظ</span>
+						</button>
+						<a href={ templ.SafeURL(fmt.Sprintf("/blog/%s", post.ID.String())) } class="anime-btn px-2 py-1.5 text-sm bg-green-500 md:px-4">
+							👁 <span class="hidden md:inline">معاينة</span>
+						</a>
+						<button
+							type="button"
+							@click="deletePost()"
+							class="p-2 hover:bg-red-100 rounded text-red-500"
+							title="حذف المدونة"
+						>
+							🗑️
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Editor -->
+			<div class="retro-card p-4 md:p-6">
+				<!-- Title -->
+				<input
+					type="text"
+					x-model="title"
+					@input="scheduleAutoSave()"
+					class="w-full text-2xl font-bold text-retro-dark bg-transparent border-none outline-none mb-4 placeholder-gray-400"
+					placeholder="عنوان المدونة..."
+					dir="rtl"
+				/>
+
+				<!-- Content -->
+				<textarea
+					x-ref="editor"
+					x-model="content"
+					@input="scheduleAutoSave()"
+					class="w-full text-retro-dark bg-transparent border-none outline-none resize-none leading-relaxed text-lg"
+					style="min-height: calc(100vh - 250px);"
+					placeholder="ابدأ الكتابة هنا...
+
+يمكنك استخدام تنسيق Markdown:
+# عنوان كبير
+## عنوان أصغر
+**نص عريض**
+*نص مائل*
+[نص الرابط](الرابط)
+![وصف الصورة](رابط الصورة)"
+					dir="rtl"
+				></textarea>
+			</div>
+		</div>
+
+	}
+}
+
+// BlogViewPage shows a single blog post rendered
+templ BlogViewPage(user *database.User, post *database.MarkdownNote) {
+	@layouts.Base(post.Title, user) {
+		<div class="max-w-2xl mx-auto">
+			<!-- Header -->
+			<div class="retro-card p-4 md:p-6">
+				<div class="flex items-center justify-between mb-4">
+					<a href="/blog" class="text-gray-500 hover:text-primary-500">
+						← العودة للمدونات
+					</a>
+					<a href={ templ.SafeURL(fmt.Sprintf("/blog/%s/edit", post.ID.String())) } class="anime-btn px-4 py-1.5 text-sm">
+						✏️ تحرير
+					</a>
+				</div>
+
+				<h1 class="text-2xl md:text-3xl font-bold text-retro-dark mb-2">{ post.Title }</h1>
+				<p class="text-sm text-gray-400 mb-6">
+					آخر تحديث: { post.UpdatedAt.Format("2006/01/02 - 15:04") }
+				</p>
+
+				<!-- Rendered Content -->
+				<div class="prose prose-lg max-w-none blog-content" dir="rtl">
+					@templ.Raw(renderMarkdown(post.Content))
+				</div>
+			</div>
+		</div>
+
+		<style>
+			.blog-content h1 {
+				font-size: 1.75rem;
+				font-weight: bold;
+				color: #3D2314;
+				margin-top: 1.5rem;
+				margin-bottom: 0.75rem;
+				border-bottom: 2px solid #F97316;
+				padding-bottom: 0.5rem;
+			}
+			.blog-content h2 {
+				font-size: 1.5rem;
+				font-weight: bold;
+				color: #3D2314;
+				margin-top: 1.25rem;
+				margin-bottom: 0.5rem;
+			}
+			.blog-content h3 {
+				font-size: 1.25rem;
+				font-weight: bold;
+				color: #3D2314;
+				margin-top: 1rem;
+				margin-bottom: 0.5rem;
+			}
+			.blog-content p {
+				margin-bottom: 1rem;
+				line-height: 1.8;
+			}
+			.blog-content a {
+				color: #F97316;
+				text-decoration: underline;
+			}
+			.blog-content a:hover {
+				color: #EA580C;
+			}
+			.blog-content img {
+				max-width: 100%;
+				border-radius: 8px;
+				margin: 1rem 0;
+				border: 2px solid #FFECD1;
+			}
+			.blog-content ul, .blog-content ol {
+				margin-bottom: 1rem;
+				padding-right: 1.5rem;
+			}
+			.blog-content li {
+				margin-bottom: 0.5rem;
+			}
+			.blog-content blockquote {
+				border-right: 4px solid #F97316;
+				padding-right: 1rem;
+				margin: 1rem 0;
+				color: #666;
+				font-style: italic;
+			}
+			.blog-content code {
+				background: #FFF5E6;
+				padding: 0.125rem 0.375rem;
+				border-radius: 4px;
+				font-family: monospace;
+			}
+			.blog-content pre {
+				background: #3D2314;
+				color: #FFF5E6;
+				padding: 1rem;
+				border-radius: 8px;
+				overflow-x: auto;
+				margin: 1rem 0;
+			}
+			.blog-content pre code {
+				background: transparent;
+				padding: 0;
+			}
+		</style>
+	}
+}
+
+func truncateContent(content string, maxLen int) string {
+	// Remove markdown syntax for preview
+	content = removeMarkdownSyntax(content)
+	// Use runes to properly handle UTF-8 characters (Arabic, etc.)
+	runes := []rune(content)
+	if len(runes) <= maxLen {
+		return content
+	}
+	return string(runes[:maxLen]) + "..."
+}
+
+func removeMarkdownSyntax(s string) string {
+	// Simple removal of common markdown
+	result := s
+	// Remove headers
+	for i := 6; i >= 1; i-- {
+		prefix := ""
+		for j := 0; j < i; j++ {
+			prefix += "#"
+		}
+		result = replaceAll(result, prefix+" ", "")
+	}
+	// Remove bold/italic
+	result = replaceAll(result, "**", "")
+	result = replaceAll(result, "*", "")
+	result = replaceAll(result, "__", "")
+	result = replaceAll(result, "_", "")
+	return result
+}
+
+func replaceAll(s, old, new string) string {
+	for {
+		idx := indexOf(s, old)
+		if idx == -1 {
+			break
+		}
+		s = s[:idx] + new + s[idx+len(old):]
+	}
+	return s
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+func renderMarkdown(content string) string {
+	if content == "" {
+		return "<p class=\"text-gray-400\">لا يوجد محتوى</p>"
+	}
+
+	// Simple markdown to HTML conversion
+	lines := splitLines(content)
+	var result string
+	inCodeBlock := false
+
+	for _, line := range lines {
+		// Code blocks
+		if hasPrefix(line, "```") {
+			if inCodeBlock {
+				result += "</code></pre>"
+				inCodeBlock = false
+			} else {
+				result += "<pre><code>"
+				inCodeBlock = true
+			}
+			continue
+		}
+
+		if inCodeBlock {
+			result += escapeHTML(line) + "\n"
+			continue
+		}
+
+		// Headers
+		if hasPrefix(line, "### ") {
+			result += "<h3>" + escapeHTML(line[4:]) + "</h3>"
+			continue
+		}
+		if hasPrefix(line, "## ") {
+			result += "<h2>" + escapeHTML(line[3:]) + "</h2>"
+			continue
+		}
+		if hasPrefix(line, "# ") {
+			result += "<h1>" + escapeHTML(line[2:]) + "</h1>"
+			continue
+		}
+
+		// Blockquote
+		if hasPrefix(line, "> ") {
+			result += "<blockquote>" + processInline(line[2:]) + "</blockquote>"
+			continue
+		}
+
+		// Empty line
+		if line == "" {
+			result += "<br>"
+			continue
+		}
+
+		// Regular paragraph
+		result += "<p>" + processInline(line) + "</p>"
+	}
+
+	if inCodeBlock {
+		result += "</code></pre>"
+	}
+
+	return result
+}
+
+func processInline(text string) string {
+	// Escape HTML first
+	text = escapeHTML(text)
+
+	// Images: ![alt](url)
+	text = processImages(text)
+
+	// Links: [text](url)
+	text = processLinks(text)
+
+	// Bold: **text**
+	text = processBold(text)
+
+	// Italic: *text*
+	text = processItalic(text)
+
+	// Inline code: `code`
+	text = processInlineCode(text)
+
+	return text
+}
+
+func processImages(text string) string {
+	runes := []rune(text)
+	result := ""
+	i := 0
+	for i < len(runes) {
+		if i+1 < len(runes) && runes[i] == '!' && runes[i+1] == '[' {
+			// Find closing bracket
+			altEnd := -1
+			for j := i + 2; j < len(runes); j++ {
+				if runes[j] == ']' {
+					altEnd = j
+					break
+				}
+			}
+			if altEnd != -1 && altEnd+1 < len(runes) && runes[altEnd+1] == '(' {
+				urlEnd := -1
+				for j := altEnd + 2; j < len(runes); j++ {
+					if runes[j] == ')' {
+						urlEnd = j
+						break
+					}
+				}
+				if urlEnd != -1 {
+					alt := string(runes[i+2 : altEnd])
+					url := string(runes[altEnd+2 : urlEnd])
+					result += "<img src=\"" + url + "\" alt=\"" + alt + "\" loading=\"lazy\">"
+					i = urlEnd + 1
+					continue
+				}
+			}
+		}
+		result += string(runes[i])
+		i++
+	}
+	return result
+}
+
+func processLinks(text string) string {
+	runes := []rune(text)
+	result := ""
+	i := 0
+	for i < len(runes) {
+		if runes[i] == '[' {
+			// Find closing bracket
+			textEnd := -1
+			for j := i + 1; j < len(runes); j++ {
+				if runes[j] == ']' {
+					textEnd = j
+					break
+				}
+			}
+			if textEnd != -1 && textEnd+1 < len(runes) && runes[textEnd+1] == '(' {
+				urlEnd := -1
+				for j := textEnd + 2; j < len(runes); j++ {
+					if runes[j] == ')' {
+						urlEnd = j
+						break
+					}
+				}
+				if urlEnd != -1 {
+					linkText := string(runes[i+1 : textEnd])
+					url := string(runes[textEnd+2 : urlEnd])
+					result += "<a href=\"" + url + "\" target=\"_blank\" rel=\"noopener\">" + linkText + "</a>"
+					i = urlEnd + 1
+					continue
+				}
+			}
+		}
+		result += string(runes[i])
+		i++
+	}
+	return result
+}
+
+func processBold(text string) string {
+	runes := []rune(text)
+	result := ""
+	i := 0
+	for i < len(runes) {
+		if i+1 < len(runes) && runes[i] == '*' && runes[i+1] == '*' {
+			// Find closing **
+			end := -1
+			for j := i + 2; j+1 < len(runes); j++ {
+				if runes[j] == '*' && runes[j+1] == '*' {
+					end = j
+					break
+				}
+			}
+			if end != -1 {
+				result += "<strong>" + string(runes[i+2:end]) + "</strong>"
+				i = end + 2
+				continue
+			}
+		}
+		result += string(runes[i])
+		i++
+	}
+	return result
+}
+
+func processItalic(text string) string {
+	runes := []rune(text)
+	result := ""
+	i := 0
+	for i < len(runes) {
+		if runes[i] == '*' && (i == 0 || runes[i-1] != '*') && (i+1 >= len(runes) || runes[i+1] != '*') {
+			// Find closing *
+			end := -1
+			for j := i + 1; j < len(runes); j++ {
+				if runes[j] == '*' && (j+1 >= len(runes) || runes[j+1] != '*') {
+					end = j
+					break
+				}
+			}
+			if end != -1 {
+				result += "<em>" + string(runes[i+1:end]) + "</em>"
+				i = end + 1
+				continue
+			}
+		}
+		result += string(runes[i])
+		i++
+	}
+	return result
+}
+
+func processInlineCode(text string) string {
+	runes := []rune(text)
+	result := ""
+	i := 0
+	for i < len(runes) {
+		if runes[i] == '`' {
+			// Find closing `
+			end := -1
+			for j := i + 1; j < len(runes); j++ {
+				if runes[j] == '`' {
+					end = j
+					break
+				}
+			}
+			if end != -1 {
+				result += "<code>" + string(runes[i+1:end]) + "</code>"
+				i = end + 1
+				continue
+			}
+		}
+		result += string(runes[i])
+		i++
+	}
+	return result
+}
+
+func splitLines(s string) []string {
+	runes := []rune(s)
+	var lines []string
+	start := 0
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\n' {
+			lines = append(lines, string(runes[start:i]))
+			start = i + 1
+		}
+	}
+	if start < len(runes) {
+		lines = append(lines, string(runes[start:]))
+	}
+	return lines
+}
+
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+func escapeHTML(s string) string {
+	result := ""
+	for _, c := range s {
+		switch c {
+		case '<':
+			result += "&lt;"
+		case '>':
+			result += "&gt;"
+		case '&':
+			result += "&amp;"
+		case '"':
+			result += "&quot;"
+		default:
+			result += string(c)
+		}
+	}
+	return result
+}
+
+func initBlogEditor(post *database.MarkdownNote) string {
+	return fmt.Sprintf(`{
+		postId: '%s',
+		title: %q,
+		content: %q,
+		saveStatus: 'محفوظ',
+		autoSaveTimer: null,
+
+		scheduleAutoSave() {
+			this.saveStatus = 'جاري الحفظ...';
+			clearTimeout(this.autoSaveTimer);
+			this.autoSaveTimer = setTimeout(() => {
+				this.savePost();
+			}, 2000);
+		},
+
+		async savePost() {
+			const formData = new FormData();
+			formData.append('title', this.title);
+			formData.append('content', this.content);
+
+			try {
+				const response = await fetch('/blog/' + this.postId + '/save', {
+					method: 'POST',
+					body: formData
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					this.saveStatus = 'تم الحفظ ✓';
+					setTimeout(() => {
+						this.saveStatus = 'محفوظ';
+					}, 2000);
+				} else {
+					this.saveStatus = 'خطأ في الحفظ!';
+				}
+			} catch (e) {
+				this.saveStatus = 'خطأ في الحفظ!';
+			}
+		},
+
+		insertFormat(before, after) {
+			const textarea = this.$refs.editor;
+			const start = textarea.selectionStart;
+			const end = textarea.selectionEnd;
+			const text = this.content;
+			const selectedText = text.substring(start, end);
+
+			// حفظ موقع السكرول قبل التعديل
+			const scrollTop = textarea.scrollTop;
+			const scrollLeft = textarea.scrollLeft;
+
+			this.content = text.substring(0, start) + before + selectedText + after + text.substring(end);
+			this.scheduleAutoSave();
+
+			// استخدام requestAnimationFrame لضمان اكتمال الرسم
+			requestAnimationFrame(() => {
+				// إرجاع الفوكس
+				textarea.focus();
+				// إرجاع موقع السكرول
+				textarea.scrollTop = scrollTop;
+				textarea.scrollLeft = scrollLeft;
+				// تحديد موقع الكرسر الجديد
+				const newCursorPos = start + before.length + selectedText.length;
+				textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+				// للموبايل: التأكد من أن الكرسر مرئي
+				// بدون تحريك الشاشة كثيراً
+				setTimeout(() => {
+					textarea.scrollTop = scrollTop;
+				}, 50);
+			});
+		},
+
+		async uploadImage(event) {
+			const file = event.target.files[0];
+			if (!file) return;
+
+			this.saveStatus = 'جاري رفع الصورة...';
+
+			const formData = new FormData();
+			formData.append('image', file);
+
+			try {
+				const response = await fetch('/blog/upload-image', {
+					method: 'POST',
+					body: formData
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					const imageMarkdown = '\n![صورة](' + data.url + ')\n';
+
+					const textarea = this.$refs.editor;
+					const start = textarea.selectionStart;
+					const scrollTop = textarea.scrollTop;
+
+					this.content = this.content.substring(0, start) + imageMarkdown + this.content.substring(start);
+
+					this.saveStatus = 'تم رفع الصورة ✓';
+					this.scheduleAutoSave();
+
+					// الحفاظ على موقع السكرول بعد إضافة الصورة
+					requestAnimationFrame(() => {
+						textarea.focus();
+						textarea.scrollTop = scrollTop;
+						const newPos = start + imageMarkdown.length;
+						textarea.setSelectionRange(newPos, newPos);
+					});
+				} else {
+					this.saveStatus = 'خطأ في رفع الصورة!';
+				}
+			} catch (e) {
+				this.saveStatus = 'خطأ في رفع الصورة!';
+			}
+
+			event.target.value = '';
+		},
+
+		async deletePost() {
+			if (!confirm('هل أنت متأكد من حذف هذه المدونة؟')) return;
+
+			try {
+				const response = await fetch('/blog/' + this.postId, {
+					method: 'DELETE'
+				});
+
+				if (response.ok) {
+					window.location.href = '/blog';
+				}
+			} catch (e) {
+				alert('حدث خطأ أثناء الحذف');
+			}
+		}
+	}`, post.ID.String(), post.Title, post.Content)
 }
