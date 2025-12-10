@@ -47,3 +47,6 @@ tmp/
 
 # Uploads
 uploads/
+
+# SQL dumps
+*.sql
