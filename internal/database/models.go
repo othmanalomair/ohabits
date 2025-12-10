@@ -281,4 +281,5 @@ type DailyNoteEntry struct {
 	Note   *Note
 	Todos  []Todo
 	Images []DailyImage
+	Mood   *MoodRating
 }

@@ -19,7 +19,7 @@ templ NoteSection(note *database.Note, images []database.DailyImage, date time.T
 
 		<textarea
 			name="text"
-			class="retro-input w-full h-20 resize-none text-sm md:text-base"
+			class="retro-input w-full h-32 md:h-40 resize-none text-sm md:text-base"
 			placeholder="اكتب أفكارك ومشاعرك هنا..."
 			dir="rtl"
 		>
@@ -68,7 +68,7 @@ templ ImageGallery(images []database.DailyImage, date time.Time) {
 					<img
 						src={ img.ThumbnailPath }
 						alt={ img.Filename }
-						class="w-10 h-10 object-cover rounded cursor-pointer border-2 border-primary-200 hover:border-primary-500 transition-colors"
+						class="w-14 h-14 md:w-16 md:h-16 object-cover rounded cursor-pointer border-2 border-primary-200 hover:border-primary-500 transition-colors"
 						@click={ fmt.Sprintf("lightbox = true; currentIndex = %d", i) }
 					/>
 					<button

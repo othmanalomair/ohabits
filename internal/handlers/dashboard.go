@@ -160,6 +160,9 @@ func (h *Handler) DailyNotesPage(c echo.Context) error {
 		// Get images for this day
 		entry.Images, _ = h.DB.GetImagesForDay(ctx, userID, date)
 
+		// Get mood for this day
+		entry.Mood, _ = h.DB.GetMoodForDay(ctx, userID, date)
+
 		entries = append(entries, entry)
 	}
 

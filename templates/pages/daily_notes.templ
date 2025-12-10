@@ -2,6 +2,8 @@ package pages
 
 import (
 	"fmt"
+	"html"
+	"strings"
 	"time"
 
 	"ohabits/internal/database"
@@ -42,7 +44,7 @@ templ DailyNotesPage(user *database.User, entries []database.DailyNoteEntry, yea
 			<div class="retro-card p-4 md:p-5">
 				<div class="flex items-center justify-between">
 					<a
-						href={ templ.SafeURL(fmt.Sprintf("/daily-notes?year=%d&month=%d", getPrevMonth(year, month))) }
+						href={ templ.SafeURL(getPrevMonthURL(year, month)) }
 						class="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors"
 					>
 						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,7 +57,7 @@ templ DailyNotesPage(user *database.User, entries []database.DailyNoteEntry, yea
 					</h1>
 
 					<a
-						href={ templ.SafeURL(fmt.Sprintf("/daily-notes?year=%d&month=%d", getNextMonth(year, month))) }
+						href={ templ.SafeURL(getNextMonthURL(year, month)) }
 						class="p-2 text-primary-600 hover:bg-primary-100 rounded-lg transition-colors"
 					>
 						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,19 +144,27 @@ templ DailyNotesPage(user *database.User, entries []database.DailyNoteEntry, yea
 				box-shadow: 1px 1px 0 #C2410C;
 			}
 
+			.notebook-content {
+				padding-top: 30px;
+			}
+
 			.notebook-text {
 				line-height: 32px;
-				padding-top: 8px;
+				overflow-wrap: anywhere;
+				word-break: break-word;
 			}
 		</style>
 	}
 }
 
 templ NotebookEntry(entry database.DailyNoteEntry) {
-	<div class="notebook-page rounded-xl p-4 md:p-6 shadow-lg border-2 border-primary-200" style="box-shadow: 4px 4px 0 #C2410C;">
+	<div class="notebook-page rounded-xl p-4 md:p-6 shadow-lg border-2 border-primary-200 relative" style="box-shadow: 4px 4px 0 #C2410C;">
 		<!-- Date Header -->
 		<div class="flex justify-center -mt-8 mb-4">
 			<a href={ templ.SafeURL(fmt.Sprintf("/?date=%s", entry.Date.Format("2006-01-02"))) } class="notebook-date">
+				if entry.Mood != nil {
+					<span class="text-xl ml-1">{ getMoodEmoji(entry.Mood.Rating) }</span>
+				}
 				<span class="text-lg">{ arabicDays[entry.Date.Weekday()] }</span>
 				<span class="mx-2">•</span>
 				<span>{ fmt.Sprintf("%d", entry.Date.Day()) } { arabicMonths[entry.Date.Month()] }</span>
@@ -163,8 +173,10 @@ templ NotebookEntry(entry database.DailyNoteEntry) {
 
 		<!-- Note Text -->
 		if entry.Note != nil && entry.Note.Text != "" {
-			<div class="pl-14 pr-4 py-2">
-				<p class="text-retro-dark whitespace-pre-wrap notebook-text">{ entry.Note.Text }</p>
+			<div class="pl-14 pr-4 overflow-hidden notebook-content">
+				<p class="text-retro-dark break-words notebook-text">
+					@templ.Raw(textToHTML(entry.Note.Text))
+				</p>
 			</div>
 		}
 
@@ -280,18 +292,18 @@ templ NotebookEntry(entry database.DailyNoteEntry) {
 	</div>
 }
 
-func getPrevMonth(year, month int) string {
+func getPrevMonthURL(year, month int) string {
 	if month == 1 {
-		return fmt.Sprintf("%d&month=%d", year-1, 12)
+		return fmt.Sprintf("/daily-notes?year=%d&month=%d", year-1, 12)
 	}
-	return fmt.Sprintf("%d&month=%d", year, month-1)
+	return fmt.Sprintf("/daily-notes?year=%d&month=%d", year, month-1)
 }
 
-func getNextMonth(year, month int) string {
+func getNextMonthURL(year, month int) string {
 	if month == 12 {
-		return fmt.Sprintf("%d&month=%d", year+1, 1)
+		return fmt.Sprintf("/daily-notes?year=%d&month=%d", year+1, 1)
 	}
-	return fmt.Sprintf("%d&month=%d", year, month+1)
+	return fmt.Sprintf("/daily-notes?year=%d&month=%d", year, month+1)
 }
 
 func imagesToJSON(images []database.DailyImage) string {
@@ -316,4 +328,30 @@ func initImagesData(images []database.DailyImage) string {
 	}
 	paths += "]"
 	return fmt.Sprintf("images = %s", paths)
+}
+
+// textToHTML converts plain text to HTML, escaping special characters and converting newlines to <br>
+func textToHTML(text string) string {
+	// First escape HTML special characters
+	escaped := html.EscapeString(text)
+	// Then convert newlines to <br> tags
+	return strings.ReplaceAll(escaped, "\n", "<br>")
+}
+
+// getMoodEmoji returns the emoji for a mood rating
+func getMoodEmoji(rating int) string {
+	switch rating {
+	case 1:
+		return "😢"
+	case 2:
+		return "😕"
+	case 3:
+		return "😐"
+	case 4:
+		return "🙂"
+	case 5:
+		return "😄"
+	default:
+		return ""
+	}
 }
