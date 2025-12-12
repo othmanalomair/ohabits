@@ -95,9 +95,9 @@ templ BlogPostsList(posts []database.MarkdownNote, searchQuery string) {
 // BlogEditPage shows the blog editor
 templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 	@layouts.Base("تحرير المدونة", user) {
-		<div class="max-w-4xl mx-auto" x-data={ initBlogEditor(post) }>
+		<div class="max-w-4xl mx-auto flex flex-col blog-editor-container" x-data={ initBlogEditor(post) }>
 			<!-- Toolbar -->
-			<div class="retro-card p-3 mb-4 sticky top-0 z-10">
+			<div class="retro-card p-3 mb-4 sticky top-0 z-10 flex-shrink-0">
 				<div class="flex items-center justify-between flex-wrap gap-2">
 					<div class="flex items-center gap-2">
 						<a href="/blog" class="text-gray-500 hover:text-primary-500 p-2">
@@ -145,13 +145,13 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 			</div>
 
 			<!-- Editor -->
-			<div class="retro-card p-4 md:p-6">
+			<div class="retro-card p-4 md:p-6 flex-1 flex flex-col min-h-0">
 				<!-- Title -->
 				<input
 					type="text"
 					x-model="title"
 					@input="scheduleAutoSave()"
-					class="w-full text-2xl font-bold text-retro-dark bg-transparent border-none outline-none mb-4 placeholder-gray-400"
+					class="w-full text-2xl font-bold text-retro-dark bg-transparent border-none outline-none mb-4 placeholder-gray-400 flex-shrink-0"
 					placeholder="عنوان المدونة..."
 					dir="rtl"
 				/>
@@ -161,8 +161,7 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 					x-ref="editor"
 					x-model="content"
 					@input="scheduleAutoSave()"
-					class="w-full text-retro-dark bg-transparent border-none outline-none resize-none leading-relaxed text-lg"
-					style="min-height: calc(100vh - 250px);"
+					class="w-full flex-1 text-retro-dark bg-transparent border-none outline-none resize-none leading-relaxed text-lg"
 					placeholder="ابدأ الكتابة هنا...
 
 يمكنك استخدام تنسيق Markdown:
@@ -177,6 +176,17 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 			</div>
 		</div>
 
+		<style>
+			.blog-editor-container {
+				height: calc(100dvh - 60px - 48px); /* 60px header, 48px main padding (py-6) */
+				min-height: 400px;
+			}
+			@media (max-width: 768px) {
+				.blog-editor-container {
+					height: calc(100dvh - 56px - 48px); /* smaller header on mobile */
+				}
+			}
+		</style>
 	}
 }
 
