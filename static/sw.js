@@ -1,6 +1,9 @@
-const CACHE_NAME = 'ohabits-v1';
-const STATIC_CACHE = 'ohabits-static-v1';
-const DYNAMIC_CACHE = 'ohabits-dynamic-v1';
+// غيّر هذا الرقم مع كل تحديث مهم
+// major.minor.patch - مثال: 1.0.0 → 1.0.1 (fix) → 1.1.0 (feature) → 2.0.0 (breaking)
+const CACHE_VERSION = '1.1.0';
+const CACHE_NAME = `ohabits-v${CACHE_VERSION}`;
+const STATIC_CACHE = `ohabits-static-v${CACHE_VERSION}`;
+const DYNAMIC_CACHE = `ohabits-dynamic-v${CACHE_VERSION}`;
 
 // الملفات الأساسية للتخزين المؤقت
 const STATIC_ASSETS = [
