@@ -4,6 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Alpine.js x-cloak - إخفاء العناصر حتى يتم تحميل Alpine */
+[x-cloak] {
+  display: none !important;
+}
+
 /* Base RTL Styles */
 @layer base {
   html {

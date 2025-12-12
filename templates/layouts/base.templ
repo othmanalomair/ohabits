@@ -74,6 +74,7 @@ templ Base(title string, user *database.User) {
 
 		<!-- Mobile Menu Overlay -->
 		<div
+			x-cloak
 			x-show="menuOpen"
 			x-transition:enter="transition ease-out duration-200"
 			x-transition:enter-start="opacity-0"
@@ -87,6 +88,7 @@ templ Base(title string, user *database.User) {
 
 		<!-- Sidebar Menu -->
 		<nav
+			x-cloak
 			x-show="menuOpen"
 			x-transition:enter="transition ease-out duration-200"
 			x-transition:enter-start="translate-x-full"
