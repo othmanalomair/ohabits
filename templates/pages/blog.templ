@@ -177,6 +177,10 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 		</div>
 
 		<style>
+			html, body {
+				overflow: hidden;
+				height: 100%;
+			}
 			.blog-editor-container {
 				height: calc(100dvh - 60px - 48px); /* 60px header, 48px main padding (py-6) */
 				min-height: 400px;
