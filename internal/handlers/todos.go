@@ -93,7 +93,11 @@ func (h *Handler) DeleteTodo(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 
-	dateStr := c.FormValue("date")
+	// Try query param first, then form value
+	dateStr := c.QueryParam("date")
+	if dateStr == "" {
+		dateStr = c.FormValue("date")
+	}
 	date, _ := time.Parse("2006-01-02", dateStr)
 	if date.IsZero() {
 		date = time.Now()
