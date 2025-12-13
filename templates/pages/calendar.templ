@@ -1,0 +1,370 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+
+	"ohabits/internal/database"
+	"ohabits/templates/layouts"
+)
+
+templ CalendarPage(user *database.User, events []database.CalendarEvent) {
+	@layouts.Base("الرزنامة", user) {
+		<div class="max-w-2xl mx-auto space-y-4">
+			<!-- Header -->
+			<div class="retro-card p-4 md:p-5">
+				<div class="flex items-center justify-between mb-4">
+					<h1 class="text-xl md:text-2xl font-bold text-retro-dark">الرزنامة</h1>
+					<a href="/" class="anime-btn px-3 py-1.5 text-sm">
+						← الرجوع
+					</a>
+				</div>
+				<p class="text-sm text-gray-600">أعياد الميلاد والمواعيد المهمة والذكريات السنوية</p>
+			</div>
+
+			<!-- Add New Event Form -->
+			<div class="retro-card p-4 md:p-5">
+				<h2 class="section-title text-lg mb-4">إضافة حدث جديد</h2>
+
+				<form
+					hx-post="/calendar"
+					hx-target="#events-list"
+					hx-swap="innerHTML"
+					hx-on::after-request="if(event.detail.successful) this.reset()"
+					class="space-y-4"
+					x-data="{ eventType: 'birthday', showEndDate: false }"
+				>
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-1">العنوان</label>
+						<input
+							type="text"
+							name="title"
+							placeholder="مثال: عيد ميلاد أحمد"
+							class="retro-input w-full"
+							required
+						/>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-2">نوع الحدث</label>
+						<div class="grid grid-cols-2 gap-2">
+							@eventTypeRadio("birthday", "🎂 عيد ميلاد", true, false)
+							@eventTypeRadio("travel", "✈️ سفر", false, true)
+							@eventTypeRadio("holiday", "🎉 عطلة", false, true)
+							@eventTypeRadio("anniversary", "💫 ذكرى سنوية", false, false)
+							@eventTypeRadio("general", "❗ عام", false, true)
+						</div>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-1">تاريخ البداية</label>
+						<input
+							type="date"
+							name="event_date"
+							class="retro-input w-full"
+							required
+						/>
+					</div>
+
+					<!-- End Date (shown for travel, holiday, general) -->
+					<div x-show="showEndDate" x-transition>
+						<label class="block text-sm font-semibold text-primary-700 mb-1">تاريخ الانتهاء (اختياري)</label>
+						<input
+							type="date"
+							name="end_date"
+							class="retro-input w-full"
+						/>
+						<p class="text-xs text-gray-500 mt-1">اتركه فارغاً إذا كان الحدث يوم واحد</p>
+					</div>
+
+					<div class="flex items-center gap-2">
+						<input
+							type="checkbox"
+							name="is_recurring"
+							id="is_recurring"
+							checked
+							class="w-4 h-4 rounded border-primary-300 text-primary-600 focus:ring-primary-500"
+						/>
+						<label for="is_recurring" class="text-sm text-retro-dark cursor-pointer">
+							يتكرر كل سنة
+						</label>
+					</div>
+
+					<div>
+						<label class="block text-sm font-semibold text-primary-700 mb-1">ملاحظات (اختياري)</label>
+						<textarea
+							name="notes"
+							placeholder="أي تفاصيل إضافية..."
+							class="retro-input w-full h-20 resize-none"
+						></textarea>
+					</div>
+
+					<button type="submit" class="anime-btn w-full py-2.5">
+						+ إضافة الحدث
+					</button>
+				</form>
+			</div>
+
+			<!-- Events List -->
+			<div id="events-list">
+				@CalendarEventsList(events)
+			</div>
+		</div>
+	}
+}
+
+templ CalendarEventsList(events []database.CalendarEvent) {
+	<!-- Birthdays -->
+	@eventTypeSection(events, "birthday", "🎂 أعياد الميلاد", "bg-pink-50 border-pink-200")
+
+	<!-- Travel -->
+	@eventTypeSection(events, "travel", "✈️ السفر", "bg-blue-50 border-blue-200")
+
+	<!-- Holidays -->
+	@eventTypeSection(events, "holiday", "🎉 العطلات", "bg-green-50 border-green-200")
+
+	<!-- Anniversaries -->
+	@eventTypeSection(events, "anniversary", "💫 الذكريات السنوية", "bg-purple-50 border-purple-200")
+
+	<!-- General -->
+	@eventTypeSection(events, "general", "❗ أحداث عامة", "bg-orange-50 border-orange-200")
+}
+
+templ eventTypeSection(events []database.CalendarEvent, eventType string, title string, bgClass string) {
+	<div class={ "retro-card p-4 md:p-5 mb-4", bgClass }>
+		<h2 class="section-title text-lg mb-4">{ title } ({ countEventsByType(events, eventType) })</h2>
+		if countEventsByTypeInt(events, eventType) == 0 {
+			<p class="text-gray-400 text-center py-4 text-sm">لا توجد أحداث</p>
+		} else {
+			<div class="space-y-3">
+				for _, event := range events {
+					if event.EventType == eventType {
+						@CalendarEventItem(event)
+					}
+				}
+			</div>
+		}
+	</div>
+}
+
+templ CalendarEventItem(event database.CalendarEvent) {
+	<div
+		id={ "event-" + event.ID.String() }
+		class="bg-white/70 rounded-xl p-4 border-2 border-primary-200"
+		x-data={ fmt.Sprintf("{ editing: false, eventType: '%s', showEndDate: %s }", event.EventType, showEndDateJS(event.EventType)) }
+	>
+		<!-- View Mode -->
+		<div x-show="!editing">
+			<div class="flex items-start justify-between gap-3">
+				<div class="flex-1">
+					<h3 class="font-bold text-retro-dark">{ event.Title }</h3>
+					<div class="flex flex-wrap items-center gap-2 mt-2 text-sm text-gray-600">
+						<span>{ formatEventDateRange(event) }</span>
+						if event.IsRecurring {
+							<span class="retro-badge text-xs">سنوي</span>
+						}
+					</div>
+					if event.Notes != "" {
+						<p class="text-sm text-gray-500 mt-2">{ event.Notes }</p>
+					}
+				</div>
+				<div class="flex gap-2">
+					<button
+						@click="editing = true"
+						class="text-primary-600 hover:text-primary-800 p-1"
+						title="تعديل"
+					>
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+						</svg>
+					</button>
+					<button
+						hx-delete={ "/calendar/" + event.ID.String() }
+						hx-target="#events-list"
+						hx-swap="innerHTML"
+						hx-confirm="هل أنت متأكد من حذف هذا الحدث؟"
+						class="text-red-500 hover:text-red-700 p-1"
+						title="حذف"
+					>
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+						</svg>
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Edit Mode -->
+		<div x-show="editing" x-cloak>
+			<form
+				hx-put={ "/calendar/" + event.ID.String() }
+				hx-target="#events-list"
+				hx-swap="innerHTML"
+				class="space-y-3"
+			>
+				<div>
+					<label class="block text-xs font-semibold text-primary-700 mb-1">العنوان</label>
+					<input
+						type="text"
+						name="title"
+						value={ event.Title }
+						class="retro-input w-full text-sm"
+						required
+					/>
+				</div>
+
+				<div>
+					<label class="block text-xs font-semibold text-primary-700 mb-2">نوع الحدث</label>
+					<div class="grid grid-cols-2 gap-2">
+						@eventTypeRadioEdit("birthday", "🎂 عيد ميلاد", event.EventType == "birthday", false)
+						@eventTypeRadioEdit("travel", "✈️ سفر", event.EventType == "travel", true)
+						@eventTypeRadioEdit("holiday", "🎉 عطلة", event.EventType == "holiday", true)
+						@eventTypeRadioEdit("anniversary", "💫 ذكرى", event.EventType == "anniversary", false)
+						@eventTypeRadioEdit("general", "❗ عام", event.EventType == "general", true)
+					</div>
+				</div>
+
+				<div>
+					<label class="block text-xs font-semibold text-primary-700 mb-1">تاريخ البداية</label>
+					<input
+						type="date"
+						name="event_date"
+						value={ event.EventDate.Format("2006-01-02") }
+						class="retro-input w-full text-sm"
+						required
+					/>
+				</div>
+
+				<!-- End Date (shown for travel, holiday, general) -->
+				<div x-show="showEndDate" x-transition>
+					<label class="block text-xs font-semibold text-primary-700 mb-1">تاريخ الانتهاء</label>
+					<input
+						type="date"
+						name="end_date"
+						value={ formatEndDate(event) }
+						class="retro-input w-full text-sm"
+					/>
+				</div>
+
+				<div class="flex items-center gap-2">
+					<input
+						type="checkbox"
+						name="is_recurring"
+						id={ "is_recurring_" + event.ID.String() }
+						if event.IsRecurring {
+							checked
+						}
+						class="w-4 h-4 rounded border-primary-300 text-primary-600 focus:ring-primary-500"
+					/>
+					<label for={ "is_recurring_" + event.ID.String() } class="text-xs text-retro-dark cursor-pointer">
+						يتكرر كل سنة
+					</label>
+				</div>
+
+				<div>
+					<label class="block text-xs font-semibold text-primary-700 mb-1">ملاحظات</label>
+					<textarea
+						name="notes"
+						class="retro-input w-full h-16 resize-none text-sm"
+					>{ event.Notes }</textarea>
+				</div>
+
+				<div class="flex gap-2 pt-2">
+					<button type="submit" class="anime-btn flex-1 py-2 text-sm">
+						حفظ التعديلات
+					</button>
+					<button
+						type="button"
+						@click="editing = false"
+						class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 bg-gray-100 rounded-lg"
+					>
+						إلغاء
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+templ eventTypeRadio(value string, label string, checked bool, supportsRange bool) {
+	<label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-cream-100 transition-colors">
+		<input
+			type="radio"
+			name="event_type"
+			value={ value }
+			if checked {
+				checked
+			}
+			x-on:change={ fmt.Sprintf("eventType = '%s'; showEndDate = %t", value, supportsRange) }
+			class="w-4 h-4 text-primary-600 focus:ring-primary-500"
+		/>
+		<span class="text-sm text-retro-dark">{ label }</span>
+	</label>
+}
+
+templ eventTypeRadioEdit(value string, label string, checked bool, supportsRange bool) {
+	<label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-cream-100 transition-colors">
+		<input
+			type="radio"
+			name="event_type"
+			value={ value }
+			if checked {
+				checked
+			}
+			x-on:change={ fmt.Sprintf("eventType = '%s'; showEndDate = %t", value, supportsRange) }
+			class="w-4 h-4 text-primary-600 focus:ring-primary-500"
+		/>
+		<span class="text-xs text-retro-dark">{ label }</span>
+	</label>
+}
+
+func countEventsByType(events []database.CalendarEvent, eventType string) string {
+	count := 0
+	for _, e := range events {
+		if e.EventType == eventType {
+			count++
+		}
+	}
+	return strconv.Itoa(count)
+}
+
+func countEventsByTypeInt(events []database.CalendarEvent, eventType string) int {
+	count := 0
+	for _, e := range events {
+		if e.EventType == eventType {
+			count++
+		}
+	}
+	return count
+}
+
+func formatEventDate(event database.CalendarEvent) string {
+	months := []string{"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"}
+	return fmt.Sprintf("%d %s", event.EventDate.Day(), months[event.EventDate.Month()-1])
+}
+
+func formatEventDateRange(event database.CalendarEvent) string {
+	months := []string{"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"}
+	startDate := fmt.Sprintf("%d %s", event.EventDate.Day(), months[event.EventDate.Month()-1])
+
+	if event.EndDate != nil && !event.EndDate.IsZero() {
+		endDate := fmt.Sprintf("%d %s", event.EndDate.Day(), months[event.EndDate.Month()-1])
+		return fmt.Sprintf("%s → %s", startDate, endDate)
+	}
+
+	return startDate
+}
+
+func formatEndDate(event database.CalendarEvent) string {
+	if event.EndDate != nil && !event.EndDate.IsZero() {
+		return event.EndDate.Format("2006-01-02")
+	}
+	return ""
+}
+
+func showEndDateJS(eventType string) string {
+	if eventType == "travel" || eventType == "holiday" || eventType == "general" {
+		return "true"
+	}
+	return "false"
+}

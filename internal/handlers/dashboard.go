@@ -89,6 +89,13 @@ func (h *Handler) Dashboard(c echo.Context) error {
 	// Workout log for this day
 	data.WorkoutLog, _ = h.DB.GetWorkoutLogForDay(ctx, userID, date)
 
+	// Calendar events for this day
+	data.CalendarEvents, _ = h.DB.GetCalendarEventsForDay(ctx, userID, date)
+
+	// Calendar events for the week (for indicators on week navigation)
+	weekStart := getWeekStart(date)
+	data.WeekEvents, _ = h.DB.GetDatesWithEventsForWeek(ctx, userID, weekStart)
+
 	return Render(c, http.StatusOK, pages.Dashboard(user, data))
 }
 
@@ -104,6 +111,12 @@ func getDayName(weekday time.Weekday) string {
 		time.Saturday:  "السبت",
 	}
 	return days[weekday]
+}
+
+// getWeekStart returns the start of the week (Sunday) for a given date
+func getWeekStart(date time.Time) time.Time {
+	weekday := int(date.Weekday())
+	return date.AddDate(0, 0, -weekday)
 }
 
 // DailyNotesPage renders the daily notes page with monthly view

@@ -1,0 +1,147 @@
+package partials
+
+import (
+	"fmt"
+	"ohabits/internal/database"
+)
+
+// CalendarEventsSection renders calendar events for the dashboard
+templ CalendarEventsSection(events []database.CalendarEventForDay) {
+	if len(events) > 0 {
+		<div class="space-y-2">
+			for _, event := range events {
+				@CalendarEventDashboardItem(event)
+			}
+		</div>
+	} else {
+		<p class="text-gray-400 text-center py-2 text-sm">لا توجد مناسبات لهذا اليوم</p>
+	}
+}
+
+// CalendarEventDashboardItem renders a single calendar event for the dashboard
+templ CalendarEventDashboardItem(event database.CalendarEventForDay) {
+	<div
+		class={ "rounded-lg p-3", getEventBgClass(event.EventType) }
+		if event.Notes != "" {
+			x-data="{ showDetails: false }"
+		}
+	>
+		<div class="flex items-center gap-3">
+			<span class="text-xl">{ getEventIcon(event.EventType) }</span>
+			<div class="flex-1">
+				<span class={ "font-semibold", getEventTextClass(event.EventType) }>{ event.Title }</span>
+				if event.EventType == "birthday" && event.YearsAgo > 0 {
+					<span class="text-xs text-gray-500 mr-2">({ fmt.Sprintf("%d", event.YearsAgo) } سنة)</span>
+				}
+				if event.HasDateRange() {
+					<span class="text-xs text-gray-500 mr-2">({ formatDashboardDateRange(event) })</span>
+				}
+			</div>
+			if event.Notes != "" {
+				<button
+					@click="showDetails = !showDetails"
+					class={ "p-1 rounded-full transition-colors", getEventInfoBtnClass(event.EventType) }
+					title="عرض التفاصيل"
+				>
+					<svg x-show="!showDetails" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+					</svg>
+					<svg x-show="showDetails" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
+			}
+		</div>
+		if event.Notes != "" {
+			<div
+				x-show="showDetails"
+				x-collapse
+				x-cloak
+				class="mt-3 pt-3 border-t border-gray-200/50"
+			>
+				<p class="text-sm text-gray-600 whitespace-pre-wrap">{ event.Notes }</p>
+			</div>
+		}
+	</div>
+}
+
+// Helper functions for event styling
+func getEventBgClass(eventType string) string {
+	switch eventType {
+	case "birthday":
+		return "bg-pink-100 border border-pink-200"
+	case "travel":
+		return "bg-blue-100 border border-blue-200"
+	case "holiday":
+		return "bg-green-100 border border-green-200"
+	case "anniversary":
+		return "bg-purple-100 border border-purple-200"
+	case "general":
+		return "bg-orange-100 border border-orange-200"
+	default:
+		return "bg-gray-100 border border-gray-200"
+	}
+}
+
+func getEventTextClass(eventType string) string {
+	switch eventType {
+	case "birthday":
+		return "text-pink-700"
+	case "travel":
+		return "text-blue-700"
+	case "holiday":
+		return "text-green-700"
+	case "anniversary":
+		return "text-purple-700"
+	case "general":
+		return "text-orange-700"
+	default:
+		return "text-gray-700"
+	}
+}
+
+func getEventIcon(eventType string) string {
+	switch eventType {
+	case "birthday":
+		return "🎂"
+	case "travel":
+		return "✈️"
+	case "holiday":
+		return "🎉"
+	case "anniversary":
+		return "💫"
+	case "general":
+		return "❗"
+	default:
+		return "📅"
+	}
+}
+
+func getEventInfoBtnClass(eventType string) string {
+	switch eventType {
+	case "birthday":
+		return "text-pink-500 hover:bg-pink-200"
+	case "travel":
+		return "text-blue-500 hover:bg-blue-200"
+	case "holiday":
+		return "text-green-500 hover:bg-green-200"
+	case "anniversary":
+		return "text-purple-500 hover:bg-purple-200"
+	case "general":
+		return "text-orange-500 hover:bg-orange-200"
+	default:
+		return "text-gray-500 hover:bg-gray-200"
+	}
+}
+
+func formatDashboardDateRange(event database.CalendarEventForDay) string {
+	months := []string{"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"}
+	startDate := fmt.Sprintf("%d %s", event.EventDate.Day(), months[event.EventDate.Month()-1])
+
+	if event.EndDate != nil && !event.EndDate.IsZero() {
+		endDate := fmt.Sprintf("%d %s", event.EndDate.Day(), months[event.EndDate.Month()-1])
+		return fmt.Sprintf("%s → %s", startDate, endDate)
+	}
+
+	return startDate
+}

@@ -13,7 +13,12 @@ templ Dashboard(user *database.User, data database.DashboardData) {
 	@layouts.Base("الرئيسية", user) {
 		<div class="space-y-4">
 			<!-- Weekly Calendar -->
-			@weeklyCalendar(data.Date)
+			@weeklyCalendar(data.Date, data.WeekEvents)
+
+			<!-- Calendar Events for Today -->
+			if len(data.CalendarEvents) > 0 {
+				@calendarEventsToday(data.CalendarEvents)
+			}
 
 			<!-- Main Grid -->
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -45,7 +50,17 @@ templ Dashboard(user *database.User, data database.DashboardData) {
 	}
 }
 
-templ weeklyCalendar(selectedDate time.Time) {
+templ calendarEventsToday(events []database.CalendarEventForDay) {
+	<div class="retro-card p-3 md:p-4 bg-gradient-to-r from-pink-50 to-purple-50 border-2 border-pink-200">
+		<h3 class="section-title text-base mb-3 flex items-center gap-2">
+			<span>🎊</span>
+			<span>مناسبات اليوم</span>
+		</h3>
+		@partials.CalendarEventsSection(events)
+	</div>
+}
+
+templ weeklyCalendar(selectedDate time.Time, weekEvents map[string]bool) {
 	<div class="retro-card p-3 md:p-4" x-data="{ showPicker: false }">
 		<!-- Current Date Display -->
 		<div class="text-center mb-3">
@@ -59,7 +74,7 @@ templ weeklyCalendar(selectedDate time.Time) {
 				<a
 					href={ templ.SafeURL(fmt.Sprintf("/?date=%s", day.Format("2006-01-02"))) }
 					class={
-						"flex flex-col items-center p-2 md:p-3 rounded-xl min-w-[48px] md:min-w-[56px] transition-all",
+						"flex flex-col items-center p-2 md:p-3 rounded-xl min-w-[48px] md:min-w-[56px] transition-all relative",
 						templ.KV("bg-primary-500 text-white shadow-lg", isSameDay(day, selectedDate)),
 						templ.KV("bg-cream-100 hover:bg-primary-100 text-retro-dark border-2 border-accent-gold", !isSameDay(day, selectedDate) && isWeekend(day)),
 						templ.KV("bg-cream-100 hover:bg-primary-100 text-retro-dark", !isSameDay(day, selectedDate) && !isWeekend(day)),
@@ -68,6 +83,14 @@ templ weeklyCalendar(selectedDate time.Time) {
 				>
 					<span class="text-xs font-medium">{ getShortArabicDay(day.Weekday()) }</span>
 					<span class="text-lg md:text-xl font-bold">{ fmt.Sprintf("%d", day.Day()) }</span>
+					// Event indicator dot
+					if hasEvent(weekEvents, day) {
+						if isSameDay(day, selectedDate) {
+							<span style="position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; background-color: white; border-radius: 50%; box-shadow: 0 0 0 2px #F472B6;"></span>
+						} else {
+							<span style="position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; background-color: #F472B6; border-radius: 50%;"></span>
+						}
+					}
 				</a>
 			}
 		</div>
@@ -246,4 +269,11 @@ func isToday(date time.Time) bool {
 	kuwaitTZ := time.FixedZone("Asia/Kuwait", 3*60*60)
 	now := time.Now().In(kuwaitTZ)
 	return date.Year() == now.Year() && date.Month() == now.Month() && date.Day() == now.Day()
+}
+
+func hasEvent(weekEvents map[string]bool, day time.Time) bool {
+	if weekEvents == nil {
+		return false
+	}
+	return weekEvents[day.Format("2006-01-02")]
 }

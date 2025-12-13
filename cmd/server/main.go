@@ -118,6 +118,12 @@ func main() {
 	protected.DELETE("/blog/:id", h.BlogDelete)
 	protected.POST("/blog/upload-image", h.BlogUploadImage)
 
+	// Calendar Events (الرزنامة)
+	protected.GET("/calendar", h.CalendarPage)
+	protected.POST("/calendar", h.CreateCalendarEvent)
+	protected.PUT("/calendar/:id", h.UpdateCalendarEvent)
+	protected.DELETE("/calendar/:id", h.DeleteCalendarEvent)
+
 	// Start server
 	go func() {
 		addr := ":" + cfg.Port

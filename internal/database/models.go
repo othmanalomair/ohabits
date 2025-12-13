@@ -262,17 +262,45 @@ type Task struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
+// CalendarEvent represents a calendar event (birthday, travel, holiday, anniversary, general)
+type CalendarEvent struct {
+	ID          uuid.UUID  `json:"id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	Title       string     `json:"title"`
+	EventType   string     `json:"event_type"`   // birthday, travel, holiday, anniversary, general
+	EventDate   time.Time  `json:"event_date"`   // Start date of the event
+	EndDate     *time.Time `json:"end_date"`     // End date (optional, for date ranges)
+	IsRecurring bool       `json:"is_recurring"` // Repeats yearly?
+	Notes       string     `json:"notes"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// HasDateRange returns true if the event spans multiple days
+func (e *CalendarEvent) HasDateRange() bool {
+	return e.EndDate != nil && !e.EndDate.IsZero()
+}
+
+// CalendarEventForDay includes additional display info
+type CalendarEventForDay struct {
+	CalendarEvent
+	YearsAgo int  `json:"years_ago"` // Years since original event (for birthdays)
+	IsToday  bool `json:"is_today"`  // Is the event today?
+}
+
 // DashboardData holds all data for the main dashboard
 type DashboardData struct {
-	Date        time.Time
-	Habits      []HabitWithCompletion
-	Medications []MedicationWithLog
-	Todos       []Todo
-	Note        *Note
-	Images      []DailyImage
-	MoodRating  *MoodRating
-	Workouts    []Workout
-	WorkoutLog  *WorkoutLog
+	Date           time.Time
+	Habits         []HabitWithCompletion
+	Medications    []MedicationWithLog
+	Todos          []Todo
+	Note           *Note
+	Images         []DailyImage
+	MoodRating     *MoodRating
+	Workouts       []Workout
+	WorkoutLog     *WorkoutLog
+	CalendarEvents []CalendarEventForDay // Calendar events for the day
+	WeekEvents     map[string]bool       // Dates with events in the current week
 }
 
 // DailyNoteEntry holds data for a single day in the daily notes page
