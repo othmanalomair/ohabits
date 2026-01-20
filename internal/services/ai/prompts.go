@@ -90,3 +90,33 @@ func PromptGenerateTitles(content string) string {
 العناوين:
 1. `
 }
+
+// PromptMonthlySummary returns a prompt to generate a monthly summary from notes
+func PromptMonthlySummary(monthName string, year int, notesContent string) string {
+	// Truncate content if too long (keep first 4000 characters)
+	runes := []rune(notesContent)
+	if len(runes) > 4000 {
+		notesContent = string(runes[:4000]) + "..."
+	}
+
+	return `[مهمة: ملخص شهري]
+
+اكتب ملخصاً موجزاً لشهر ` + monthName + ` ` + formatYear(year) + ` بناءً على المذكرات اليومية التالية.
+
+قواعد:
+- ملخص عربي موجز (3-5 جمل)
+- ركز على الأحداث المهمة والإنجازات
+- اذكر المشاعر السائدة إن وجدت
+- لا تكرر تفاصيل كل يوم
+- ابدأ مباشرة بالملخص بدون مقدمة
+- لا تضف عناوين أو ترقيم
+
+المذكرات:
+` + notesContent + `
+
+الملخص:`
+}
+
+func formatYear(year int) string {
+	return string(rune('0'+year/1000)) + string(rune('0'+(year/100)%10)) + string(rune('0'+(year/10)%10)) + string(rune('0'+year%10))
+}

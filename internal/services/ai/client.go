@@ -240,3 +240,9 @@ func (s *Service) IsAvailable() bool {
 
 	return resp.StatusCode == http.StatusOK
 }
+
+// GenerateMonthlySummary generates a summary for the given month's notes
+func (s *Service) GenerateMonthlySummary(ctx context.Context, monthName string, year int, notesContent string) (string, error) {
+	prompt := PromptMonthlySummary(monthName, year, notesContent)
+	return s.Generate(ctx, prompt)
+}

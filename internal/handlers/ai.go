@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"net/http"
+	"time"
+
+	"ohabits/internal/middleware"
 
 	"github.com/labstack/echo/v4"
 )
@@ -122,5 +125,198 @@ func (h *Handler) AIStatus(c echo.Context) error {
 			}
 			return "خدمة AI غير متاحة - تأكد من تشغيل Ollama"
 		}(),
+	})
+}
+
+// Arabic month names for AI prompt
+var arabicMonthNames = map[time.Month]string{
+	time.January:   "يناير",
+	time.February:  "فبراير",
+	time.March:     "مارس",
+	time.April:     "أبريل",
+	time.May:       "مايو",
+	time.June:      "يونيو",
+	time.July:      "يوليو",
+	time.August:    "أغسطس",
+	time.September: "سبتمبر",
+	time.October:   "أكتوبر",
+	time.November:  "نوفمبر",
+	time.December:  "ديسمبر",
+}
+
+// MonthlySummaryRequest represents the request for monthly summary
+type MonthlySummaryRequest struct {
+	Year  int `json:"year" form:"year"`
+	Month int `json:"month" form:"month"`
+}
+
+// MonthlySummaryResponse represents the response for monthly summary
+type MonthlySummaryResponse struct {
+	Summary       string `json:"summary"`
+	IsAIGenerated bool   `json:"is_ai_generated"`
+	Error         string `json:"error,omitempty"`
+}
+
+// SaveMonthlySummaryRequest represents the request for saving monthly summary
+type SaveMonthlySummaryRequest struct {
+	Year    int    `json:"year" form:"year"`
+	Month   int    `json:"month" form:"month"`
+	Summary string `json:"summary" form:"summary"`
+}
+
+// AIGenerateMonthlySummary handles POST /api/ai/monthly-summary
+func (h *Handler) AIGenerateMonthlySummary(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, MonthlySummaryResponse{
+			Error: "غير مصرح",
+		})
+	}
+
+	// Check if AI service is available
+	if h.AI == nil {
+		return c.JSON(http.StatusServiceUnavailable, MonthlySummaryResponse{
+			Error: "خدمة الذكاء الاصطناعي غير متوفرة",
+		})
+	}
+
+	var req MonthlySummaryRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "بيانات غير صالحة",
+		})
+	}
+
+	// Validate year and month
+	if req.Year < 2020 || req.Year > 2100 || req.Month < 1 || req.Month > 12 {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "السنة أو الشهر غير صالح",
+		})
+	}
+
+	ctx := c.Request().Context()
+
+	// Get all notes for the month
+	notesContent, err := h.DB.GetAllNotesTextForMonth(ctx, userID, req.Year, req.Month)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, MonthlySummaryResponse{
+			Error: "فشل جلب المذكرات: " + err.Error(),
+		})
+	}
+
+	if notesContent == "" {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "لا توجد مذكرات في هذا الشهر",
+		})
+	}
+
+	// Generate summary with AI
+	monthName := arabicMonthNames[time.Month(req.Month)]
+	summary, err := h.AI.GenerateMonthlySummary(ctx, monthName, req.Year, notesContent)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, MonthlySummaryResponse{
+			Error: "فشل توليد الملخص: " + err.Error(),
+		})
+	}
+
+	// Save the summary
+	_, err = h.DB.SaveMonthlySummary(ctx, userID, req.Year, req.Month, summary, true)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, MonthlySummaryResponse{
+			Error: "فشل حفظ الملخص: " + err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, MonthlySummaryResponse{
+		Summary:       summary,
+		IsAIGenerated: true,
+	})
+}
+
+// GetMonthlySummary handles GET /api/monthly-summary
+func (h *Handler) GetMonthlySummary(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, MonthlySummaryResponse{
+			Error: "غير مصرح",
+		})
+	}
+
+	year, err := parseIntParam(c.QueryParam("year"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "السنة غير صالحة",
+		})
+	}
+
+	month, err := parseIntParam(c.QueryParam("month"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "الشهر غير صالح",
+		})
+	}
+
+	ctx := c.Request().Context()
+	summary, err := h.DB.GetMonthlySummary(ctx, userID, year, month)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, MonthlySummaryResponse{
+			Error: "فشل جلب الملخص: " + err.Error(),
+		})
+	}
+
+	if summary == nil {
+		return c.JSON(http.StatusOK, MonthlySummaryResponse{
+			Summary: "",
+		})
+	}
+
+	return c.JSON(http.StatusOK, MonthlySummaryResponse{
+		Summary:       summary.SummaryText,
+		IsAIGenerated: summary.IsAIGenerated,
+	})
+}
+
+// SaveMonthlySummary handles POST /api/monthly-summary/save (manual edit)
+func (h *Handler) SaveMonthlySummary(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, MonthlySummaryResponse{
+			Error: "غير مصرح",
+		})
+	}
+
+	var req SaveMonthlySummaryRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "بيانات غير صالحة",
+		})
+	}
+
+	// Validate
+	if req.Year < 2020 || req.Year > 2100 || req.Month < 1 || req.Month > 12 {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "السنة أو الشهر غير صالح",
+		})
+	}
+
+	if req.Summary == "" {
+		return c.JSON(http.StatusBadRequest, MonthlySummaryResponse{
+			Error: "الملخص مطلوب",
+		})
+	}
+
+	ctx := c.Request().Context()
+
+	// Save with is_ai_generated = false (manual edit)
+	_, err := h.DB.SaveMonthlySummary(ctx, userID, req.Year, req.Month, req.Summary, false)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, MonthlySummaryResponse{
+			Error: "فشل حفظ الملخص: " + err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, MonthlySummaryResponse{
+		Summary:       req.Summary,
+		IsAIGenerated: false,
 	})
 }

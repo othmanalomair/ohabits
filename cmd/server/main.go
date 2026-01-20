@@ -153,6 +153,11 @@ func main() {
 	protected.GET("/api/ai/status", h.AIStatus)
 	protected.POST("/api/ai/fix-text", h.AIFixText)
 	protected.POST("/api/ai/generate-title", h.AIGenerateTitles)
+	protected.POST("/api/ai/monthly-summary", h.AIGenerateMonthlySummary)
+
+	// Monthly Summary (ملخص الشهر)
+	protected.GET("/api/monthly-summary", h.GetMonthlySummary)
+	protected.POST("/api/monthly-summary/save", h.SaveMonthlySummary)
 
 	// Start server
 	go func() {

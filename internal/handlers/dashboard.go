@@ -179,7 +179,10 @@ func (h *Handler) DailyNotesPage(c echo.Context) error {
 		entries = append(entries, entry)
 	}
 
-	return Render(c, http.StatusOK, pages.DailyNotesPage(user, entries, year, month))
+	// Get monthly summary
+	summary, _ := h.DB.GetMonthlySummary(ctx, userID, year, month)
+
+	return Render(c, http.StatusOK, pages.DailyNotesPage(user, entries, year, month, summary))
 }
 
 func parseIntParam(s string) (int, error) {

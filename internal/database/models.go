@@ -311,3 +311,15 @@ type DailyNoteEntry struct {
 	Images []DailyImage
 	Mood   *MoodRating
 }
+
+// MonthlySummary represents a monthly summary (AI-generated or manual)
+type MonthlySummary struct {
+	ID            uuid.UUID `json:"id"`
+	UserID        uuid.UUID `json:"user_id"`
+	Year          int       `json:"year"`
+	Month         int       `json:"month"`
+	SummaryText   string    `json:"summary_text"`
+	IsAIGenerated bool      `json:"is_ai_generated"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
