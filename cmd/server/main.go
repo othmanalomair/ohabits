@@ -13,6 +13,7 @@ import (
 	"ohabits/internal/database"
 	"ohabits/internal/handlers"
 	"ohabits/internal/middleware"
+	"ohabits/internal/services/ai"
 
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
@@ -34,8 +35,16 @@ func main() {
 	// Create auth middleware
 	auth := middleware.NewAuthMiddleware(cfg.JWTSecret)
 
+	// Create AI service
+	aiService := ai.New(cfg.OllamaURL, cfg.AIModel)
+	if aiService.IsAvailable() {
+		log.Println("✅ خدمة AI متاحة (Ollama)")
+	} else {
+		log.Println("⚠️  خدمة AI غير متاحة - تأكد من تشغيل Ollama")
+	}
+
 	// Create handlers
-	h := handlers.New(db, cfg, auth)
+	h := handlers.New(db, cfg, auth, aiService)
 
 	// Create Echo instance
 	e := echo.New()
@@ -46,14 +55,30 @@ func main() {
 	e.Use(echomw.Recover())
 	e.Use(echomw.Gzip())
 
+	// Rate Limiting - حماية من هجمات Brute Force
+	e.Use(echomw.RateLimiter(echomw.NewRateLimiterMemoryStore(20))) // 20 request/second عام
+
+	// Security Headers - حماية من XSS وهجمات أخرى
+	e.Use(echomw.SecureWithConfig(echomw.SecureConfig{
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "SAMEORIGIN",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:;",
+	}))
+
 	// Static files
 	e.Static("/static", "static")
 	e.Static("/uploads", "uploads")
 	e.File("/favicon.ico", "static/images/icons/icon-192x192.png")
 
+	// Rate limiter صارم للـ Login (5 محاولات بالدقيقة)
+	loginLimiter := echomw.RateLimiter(echomw.NewRateLimiterMemoryStoreWithConfig(
+		echomw.RateLimiterMemoryStoreConfig{Rate: 5, Burst: 5, ExpiresIn: time.Minute},
+	))
+
 	// Public routes
 	e.GET("/login", h.LoginPage)
-	e.POST("/login", h.Login)
+	e.POST("/login", h.Login, loginLimiter)
 	e.GET("/signup", h.SignupPage)
 	e.POST("/signup", h.Signup)
 	e.GET("/logout", h.Logout)
@@ -123,6 +148,11 @@ func main() {
 	protected.POST("/calendar", h.CreateCalendarEvent)
 	protected.PUT("/calendar/:id", h.UpdateCalendarEvent)
 	protected.DELETE("/calendar/:id", h.DeleteCalendarEvent)
+
+	// AI (الذكاء الاصطناعي)
+	protected.GET("/api/ai/status", h.AIStatus)
+	protected.POST("/api/ai/fix-text", h.AIFixText)
+	protected.POST("/api/ai/generate-title", h.AIGenerateTitles)
 
 	// Start server
 	go func() {

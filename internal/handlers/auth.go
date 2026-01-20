@@ -52,58 +52,15 @@ func (h *Handler) Login(c echo.Context) error {
 }
 
 // SignupPage renders the signup page
+// التسجيل مغلق - يتم التحويل لصفحة تسجيل الدخول
 func (h *Handler) SignupPage(c echo.Context) error {
-	// Check if already logged in
-	if cookie, err := c.Cookie("token"); err == nil {
-		if _, err := h.Auth.ValidateToken(cookie.Value); err == nil {
-			return c.Redirect(http.StatusSeeOther, "/")
-		}
-	}
-
-	return Render(c, http.StatusOK, pages.Signup("", ""))
+	return Render(c, http.StatusOK, pages.Login("التسجيل مغلق حالياً", ""))
 }
 
 // Signup handles signup form submission
+// التسجيل مغلق
 func (h *Handler) Signup(c echo.Context) error {
-	email := c.FormValue("email")
-	password := c.FormValue("password")
-	confirmPassword := c.FormValue("confirm_password")
-	displayName := c.FormValue("display_name")
-
-	if email == "" || password == "" {
-		return Render(c, http.StatusOK, pages.Signup("البريد الإلكتروني وكلمة المرور مطلوبان", email))
-	}
-
-	if password != confirmPassword {
-		return Render(c, http.StatusOK, pages.Signup("كلمتا المرور غير متطابقتان", email))
-	}
-
-	if len(password) < 6 {
-		return Render(c, http.StatusOK, pages.Signup("كلمة المرور يجب أن تكون ٦ أحرف على الأقل", email))
-	}
-
-	if displayName == "" {
-		displayName = email
-	}
-
-	user, err := h.DB.CreateUser(c.Request().Context(), email, password, displayName)
-	if err != nil {
-		if err == database.ErrEmailExists {
-			return Render(c, http.StatusOK, pages.Signup("البريد الإلكتروني مستخدم بالفعل", email))
-		}
-		return Render(c, http.StatusOK, pages.Signup("حدث خطأ، حاول مرة أخرى", email))
-	}
-
-	// Generate JWT token
-	token, err := h.Auth.GenerateToken(user.ID, user.Email)
-	if err != nil {
-		return Render(c, http.StatusOK, pages.Signup("حدث خطأ في إنشاء الحساب", email))
-	}
-
-	// Set cookie
-	middleware.SetAuthCookie(c, token)
-
-	return c.Redirect(http.StatusSeeOther, "/")
+	return Render(c, http.StatusOK, pages.Login("التسجيل مغلق حالياً", ""))
 }
 
 // Logout handles logout

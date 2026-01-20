@@ -32,7 +32,7 @@ func (m *AuthMiddleware) GenerateToken(userID uuid.UUID, email string) (string, 
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour)), // 30 days
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)), // 7 days
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -131,14 +131,18 @@ func GetUserID(c echo.Context) (uuid.UUID, bool) {
 
 // SetAuthCookie sets the authentication cookie
 func SetAuthCookie(c echo.Context, token string) {
+	// تحديد إذا كان الاتصال آمن (HTTPS)
+	secure := c.Scheme() == "https" ||
+		c.Request().Header.Get("X-Forwarded-Proto") == "https"
+
 	c.SetCookie(&http.Cookie{
 		Name:     "token",
 		Value:    token,
 		Path:     "/",
-		MaxAge:   30 * 24 * 60 * 60, // 30 days
+		MaxAge:   7 * 24 * 60 * 60, // 7 days
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
 	})
 }
 

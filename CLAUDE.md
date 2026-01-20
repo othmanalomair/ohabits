@@ -89,3 +89,45 @@ make db-reset     # إعادة تعيين قاعدة البيانات
 
 ## ملف التصميم المرجعي
 `design-reference.html` - يحتوي على كل عناصر التصميم والألوان والستايلات
+
+## AI Features (Ollama)
+
+### المتطلبات
+- Ollama مثبت على السيرفر (ليس Docker)
+- موديل `qwen2.5:7b-instruct` محمّل
+
+### تنصيب Ollama
+```bash
+# تنصيب Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# تشغيل Ollama كـ service
+sudo systemctl enable ollama
+sudo systemctl start ollama
+
+# تحميل الموديل
+ollama pull qwen2.5:7b-instruct
+
+# التحقق من العمل
+curl http://localhost:11434/api/tags
+```
+
+### الإعدادات
+- `OLLAMA_URL`: عنوان سيرفر Ollama (default: `http://localhost:11434`)
+- `AI_MODEL`: اسم الموديل (default: `qwen2.5:7b-instruct`)
+
+### الميزات
+- تصحيح الأخطاء الإملائية والنحوية
+- تحسين أسلوب الكتابة
+- تبسيط النصوص
+- توليد عناوين مقترحة للمدونة
+
+### API Endpoints
+- `GET /api/ai/status` - التحقق من حالة خدمة AI
+- `POST /api/ai/fix-text` - تحسين/تصحيح النص المحدد
+- `POST /api/ai/generate-title` - توليد عناوين مقترحة
+
+### ملفات AI
+- `internal/services/ai/client.go` - Ollama HTTP client
+- `internal/services/ai/prompts.go` - قوالب Prompts العربية
+- `internal/handlers/ai.go` - AI HTTP handlers

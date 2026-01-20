@@ -197,6 +197,12 @@ func (h *Handler) BlogUploadImage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "لم يتم تحديد صورة"})
 	}
 
+	// Validate file size (max 5MB)
+	const maxSize = 5 << 20 // 5MB
+	if file.Size > maxSize {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "حجم الصورة كبير جداً (الحد الأقصى 5MB)"})
+	}
+
 	// Validate file type
 	ext := strings.ToLower(filepath.Ext(file.Filename))
 	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {

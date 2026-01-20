@@ -211,10 +211,15 @@ func (h *Handler) UpdateProfileAvatar(c echo.Context) error {
 		return Render(c, http.StatusOK, pages.AvatarSection(user))
 	}
 
-	// Delete old avatar if exists
+	// Delete old avatar if exists (with path validation)
 	if user.GetAvatarURL() != "" {
 		oldPath := strings.TrimPrefix(user.GetAvatarURL(), "/")
-		os.Remove(oldPath)
+		// تنظيف المسار ومنع Path Traversal
+		cleanPath := filepath.Clean(oldPath)
+		// التأكد من أن المسار داخل مجلد uploads فقط
+		if strings.HasPrefix(cleanPath, "uploads/") && !strings.Contains(cleanPath, "..") {
+			os.Remove(cleanPath)
+		}
 	}
 
 	// Update database

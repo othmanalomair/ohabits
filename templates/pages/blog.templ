@@ -125,6 +125,62 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 							📷
 							<input type="file" accept="image/*" class="hidden" @change="uploadImage($event)"/>
 						</label>
+						<!-- AI Button with Dropdown -->
+						<div class="relative" x-data="{ aiMenuOpen: false }">
+							<button
+								type="button"
+								@click="aiMenuOpen = !aiMenuOpen"
+								@click.away="aiMenuOpen = false"
+								class="p-2 hover:bg-primary-100 rounded flex items-center gap-1"
+								title="ذكاء اصطناعي"
+								:class="{ 'bg-primary-100': aiMenuOpen }"
+							>
+								🤖
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+								</svg>
+							</button>
+							<!-- Dropdown Menu -->
+							<div
+								x-show="aiMenuOpen"
+								x-transition
+								class="absolute left-0 md:right-0 md:left-auto mt-2 w-48 bg-white rounded-lg shadow-lg border-2 border-primary-200 py-2 z-50"
+							>
+								<button
+									type="button"
+									@click="aiFixText('improve'); aiMenuOpen = false"
+									class="w-full text-right px-4 py-2 hover:bg-primary-50 flex items-center gap-2"
+								>
+									<span>✨</span>
+									<span>تحسين النص</span>
+								</button>
+								<button
+									type="button"
+									@click="aiFixText('fix'); aiMenuOpen = false"
+									class="w-full text-right px-4 py-2 hover:bg-primary-50 flex items-center gap-2"
+								>
+									<span>📝</span>
+									<span>تصحيح الأخطاء</span>
+								</button>
+								<button
+									type="button"
+									@click="aiFixText('simplify'); aiMenuOpen = false"
+									class="w-full text-right px-4 py-2 hover:bg-primary-50 flex items-center gap-2"
+								>
+									<span>🎯</span>
+									<span>تبسيط النص</span>
+								</button>
+								<div class="border-t border-gray-200 my-1"></div>
+								<button
+									type="button"
+									@click="aiGenerateTitles(); aiMenuOpen = false"
+									class="w-full text-right px-4 py-2 hover:bg-primary-50 flex items-center gap-2"
+								>
+									<span>💡</span>
+									<span>اقتراح عناوين</span>
+								</button>
+							</div>
+						</div>
 						<div class="w-px h-6 bg-gray-300 mx-1"></div>
 						<button type="button" @click="savePost()" class="anime-btn px-2 py-1.5 text-sm md:px-4">
 							💾 <span class="hidden md:inline">حفظ</span>
@@ -150,6 +206,7 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 				<input
 					type="text"
 					x-model="title"
+					x-ref="titleInput"
 					@input="scheduleAutoSave()"
 					class="w-full text-2xl font-bold text-retro-dark bg-transparent border-none outline-none mb-4 placeholder-gray-400 flex-shrink-0"
 					placeholder="عنوان المدونة..."
@@ -173,6 +230,48 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 ![وصف الصورة](رابط الصورة)"
 					dir="rtl"
 				></textarea>
+			</div>
+
+			<!-- AI Loading Overlay -->
+			<div
+				x-show="aiLoading"
+				x-transition
+				class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+			>
+				<div class="bg-white rounded-xl p-6 shadow-xl text-center">
+					<div class="animate-spin text-4xl mb-3">🤖</div>
+					<p class="text-retro-dark font-bold" x-text="aiLoadingMessage">جاري المعالجة...</p>
+				</div>
+			</div>
+
+			<!-- AI Titles Modal -->
+			<div
+				x-show="showTitlesModal"
+				x-transition
+				class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+				@click.self="showTitlesModal = false"
+			>
+				<div class="bg-white rounded-xl p-6 shadow-xl w-full max-w-md">
+					<h3 class="text-xl font-bold text-retro-dark mb-4">💡 عناوين مقترحة</h3>
+					<div class="space-y-2">
+						<template x-for="(t, index) in suggestedTitles" :key="index">
+							<button
+								type="button"
+								@click="selectTitle(t)"
+								class="w-full text-right p-3 rounded-lg border-2 border-primary-200 hover:border-primary-400 hover:bg-primary-50 transition-colors"
+							>
+								<span x-text="t"></span>
+							</button>
+						</template>
+					</div>
+					<button
+						type="button"
+						@click="showTitlesModal = false"
+						class="w-full mt-4 p-2 text-gray-500 hover:text-gray-700"
+					>
+						إلغاء
+					</button>
+				</div>
 			</div>
 		</div>
 
@@ -633,6 +732,10 @@ func initBlogEditor(post *database.MarkdownNote) string {
 		content: %q,
 		saveStatus: 'محفوظ',
 		autoSaveTimer: null,
+		aiLoading: false,
+		aiLoadingMessage: 'جاري المعالجة...',
+		showTitlesModal: false,
+		suggestedTitles: [],
 
 		scheduleAutoSave() {
 			this.saveStatus = 'جاري الحفظ...';
@@ -759,6 +862,118 @@ func initBlogEditor(post *database.MarkdownNote) string {
 			} catch (e) {
 				alert('حدث خطأ أثناء الحذف');
 			}
+		},
+
+		async aiFixText(action) {
+			const textarea = this.$refs.editor;
+			const start = textarea.selectionStart;
+			const end = textarea.selectionEnd;
+
+			// Check if text is selected
+			if (start === end) {
+				alert('الرجاء تحديد النص الذي تريد تحسينه');
+				return;
+			}
+
+			const selectedText = this.content.substring(start, end);
+
+			// Set loading state
+			this.aiLoading = true;
+			this.aiLoadingMessage = action === 'improve' ? 'جاري تحسين النص...' :
+									action === 'fix' ? 'جاري تصحيح الأخطاء...' :
+									'جاري تبسيط النص...';
+
+			try {
+				const response = await fetch('/api/ai/fix-text', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						text: selectedText,
+						action: action
+					})
+				});
+
+				const data = await response.json();
+
+				if (data.error) {
+					alert(data.error);
+					return;
+				}
+
+				// Replace the selected text with the improved version
+				const scrollTop = textarea.scrollTop;
+				this.content = this.content.substring(0, start) + data.text + this.content.substring(end);
+				this.scheduleAutoSave();
+
+				// Restore scroll position
+				requestAnimationFrame(() => {
+					textarea.focus();
+					textarea.scrollTop = scrollTop;
+					const newEnd = start + data.text.length;
+					textarea.setSelectionRange(start, newEnd);
+				});
+
+			} catch (e) {
+				alert('حدث خطأ أثناء التواصل مع الذكاء الاصطناعي');
+				console.error(e);
+			} finally {
+				this.aiLoading = false;
+			}
+		},
+
+		async aiGenerateTitles() {
+			if (!this.content.trim()) {
+				alert('الرجاء كتابة محتوى المدونة أولاً');
+				return;
+			}
+
+			this.aiLoading = true;
+			this.aiLoadingMessage = 'جاري توليد العناوين...';
+
+			try {
+				const response = await fetch('/api/ai/generate-title', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						content: this.content
+					})
+				});
+
+				const data = await response.json();
+
+				if (data.error) {
+					alert(data.error);
+					return;
+				}
+
+				if (data.titles && data.titles.length > 0) {
+					this.suggestedTitles = data.titles;
+					this.showTitlesModal = true;
+				} else {
+					alert('لم يتم توليد عناوين. جرب مرة أخرى.');
+				}
+
+			} catch (e) {
+				alert('حدث خطأ أثناء التواصل مع الذكاء الاصطناعي');
+				console.error(e);
+			} finally {
+				this.aiLoading = false;
+			}
+		},
+
+		selectTitle(title) {
+			this.title = title;
+			this.showTitlesModal = false;
+			this.scheduleAutoSave();
+
+			// Focus on title input
+			requestAnimationFrame(() => {
+				this.$refs.titleInput.focus();
+			});
 		}
 	}`, post.ID.String(), post.Title, post.Content)
 }
