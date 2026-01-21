@@ -45,7 +45,7 @@ func Load() *Config {
 		Port:        getEnv("PORT", "8080"),
 		Env:         env,
 		OllamaURL:   getEnv("OLLAMA_URL", "http://localhost:11434"),
-		AIModel:     getEnv("AI_MODEL", "iKhalid/ALLaM:7b"),
+		AIModel:     getEnv("AI_MODEL", "ministral-3:8b"),
 	}
 }
 

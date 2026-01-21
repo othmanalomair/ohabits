@@ -20,11 +20,17 @@ type Service struct {
 	mu        sync.Mutex
 }
 
+// OllamaOptions represents options for Ollama generation
+type OllamaOptions struct {
+	NumCtx int `json:"num_ctx,omitempty"`
+}
+
 // OllamaRequest represents a request to Ollama API
 type OllamaRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	Stream bool   `json:"stream"`
+	Model   string         `json:"model"`
+	Prompt  string         `json:"prompt"`
+	Stream  bool           `json:"stream"`
+	Options *OllamaOptions `json:"options,omitempty"`
 }
 
 // OllamaResponse represents a response from Ollama API
@@ -57,10 +63,14 @@ func (s *Service) Generate(ctx context.Context, prompt string) (string, error) {
 		return "", ctx.Err()
 	}
 
+	// DefaultNumCtx is safe for RTX 3080 10GB VRAM
+	const defaultNumCtx = 8192
+
 	reqBody := OllamaRequest{
-		Model:  s.model,
-		Prompt: prompt,
-		Stream: false,
+		Model:   s.model,
+		Prompt:  prompt,
+		Stream:  false,
+		Options: &OllamaOptions{NumCtx: defaultNumCtx},
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -108,6 +118,12 @@ func (s *Service) FixText(ctx context.Context, text string, action string) (stri
 		prompt = PromptImproveText(text)
 	}
 
+	return s.Generate(ctx, prompt)
+}
+
+// FixTextCustom applies custom user instructions to the given text
+func (s *Service) FixTextCustom(ctx context.Context, text, customPrompt string) (string, error) {
+	prompt := PromptCustomEdit(text, customPrompt)
 	return s.Generate(ctx, prompt)
 }
 

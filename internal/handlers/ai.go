@@ -11,8 +11,9 @@ import (
 
 // FixTextRequest represents the request body for text fixing
 type FixTextRequest struct {
-	Text   string `json:"text" form:"text"`
-	Action string `json:"action" form:"action"` // improve, fix, simplify
+	Text         string `json:"text" form:"text"`
+	Action       string `json:"action" form:"action"`             // improve, fix, simplify, custom
+	CustomPrompt string `json:"customPrompt" form:"customPrompt"` // custom instructions for 'custom' action
 }
 
 // FixTextResponse represents the response for text fixing
@@ -60,7 +61,15 @@ func (h *Handler) AIFixText(c echo.Context) error {
 	}
 
 	// Process the text with AI
-	result, err := h.AI.FixText(c.Request().Context(), req.Text, req.Action)
+	var result string
+	var err error
+
+	if req.Action == "custom" && req.CustomPrompt != "" {
+		result, err = h.AI.FixTextCustom(c.Request().Context(), req.Text, req.CustomPrompt)
+	} else {
+		result, err = h.AI.FixText(c.Request().Context(), req.Text, req.Action)
+	}
+
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, FixTextResponse{
 			Error: "حدث خطأ أثناء معالجة النص: " + err.Error(),

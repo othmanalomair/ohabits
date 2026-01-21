@@ -170,6 +170,14 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 									<span>🎯</span>
 									<span>تبسيط النص</span>
 								</button>
+								<button
+									type="button"
+									@click="openCustomPromptModal(); aiMenuOpen = false"
+									class="w-full text-right px-4 py-2 hover:bg-primary-50 flex items-center gap-2"
+								>
+									<span>✏️</span>
+									<span>تعديل مخصص</span>
+								</button>
 								<div class="border-t border-gray-200 my-1"></div>
 								<button
 									type="button"
@@ -273,6 +281,79 @@ templ BlogEditPage(user *database.User, post *database.MarkdownNote) {
 					</button>
 				</div>
 			</div>
+
+			<!-- AI Preview Modal -->
+			<div
+				x-show="showPreviewModal"
+				x-transition
+				class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+				@click.self="showPreviewModal = false"
+			>
+				<div class="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-2xl max-h-[85vh] sm:max-h-[90vh] flex flex-col">
+					<!-- Header -->
+					<div class="p-4 border-b border-gray-100 flex-shrink-0">
+						<h3 class="text-lg font-bold text-retro-dark">🤖 مراجعة الاقتراح</h3>
+					</div>
+
+					<!-- Scrollable Content -->
+					<div class="flex-1 overflow-y-auto p-4 space-y-4">
+						<div>
+							<label class="block text-sm font-bold text-primary-700 mb-2">النص الأصلي:</label>
+							<div class="retro-input bg-gray-50 max-h-[120px] sm:max-h-[150px] overflow-y-auto p-3 text-sm text-gray-600 whitespace-pre-wrap" dir="rtl" x-text="originalText"></div>
+						</div>
+
+						<div>
+							<label class="block text-sm font-bold text-primary-700 mb-2">النص المقترح:</label>
+							<div class="retro-input bg-green-50 border-green-300 max-h-[120px] sm:max-h-[150px] overflow-y-auto p-3 text-sm text-retro-dark whitespace-pre-wrap" dir="rtl" x-text="suggestedText"></div>
+						</div>
+					</div>
+
+					<!-- Fixed Buttons -->
+					<div class="p-4 border-t border-gray-100 flex-shrink-0 flex gap-3">
+						<button type="button" @click="acceptSuggestion()" class="anime-btn flex-1 py-3 text-sm">✓ قبول</button>
+						<button type="button" @click="showPreviewModal = false" class="flex-1 py-3 text-sm border-2 border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 font-bold">إلغاء</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- AI Custom Prompt Modal -->
+			<div
+				x-show="showCustomPromptModal"
+				x-transition
+				class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4"
+				@click.self="showCustomPromptModal = false"
+			>
+				<div class="bg-white rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[85vh] flex flex-col">
+					<!-- Header -->
+					<div class="p-4 border-b border-gray-100 flex-shrink-0">
+						<h3 class="text-lg font-bold text-retro-dark">✏️ تعديل مخصص</h3>
+					</div>
+
+					<!-- Content -->
+					<div class="flex-1 overflow-y-auto p-4 space-y-4">
+						<div>
+							<label class="block text-sm font-bold text-primary-700 mb-2">النص المحدد:</label>
+							<div class="retro-input bg-gray-50 max-h-[80px] overflow-y-auto p-3 text-sm text-gray-600 whitespace-pre-wrap" dir="rtl" x-text="originalText"></div>
+						</div>
+
+						<div>
+							<label class="block text-sm font-bold text-primary-700 mb-2">التعليمات:</label>
+							<textarea x-model="customPromptText" class="retro-input w-full h-20 resize-none text-sm"
+								placeholder="مثال: اجعل النص أكثر رسمية..." dir="rtl"></textarea>
+						</div>
+					</div>
+
+					<!-- Fixed Buttons -->
+					<div class="p-4 border-t border-gray-100 flex-shrink-0 flex gap-3">
+						<button type="button" @click="submitCustomPrompt()" :disabled="!customPromptText.trim()"
+							class="anime-btn flex-1 py-3 text-sm" :class="{ 'opacity-50 cursor-not-allowed': !customPromptText.trim() }">
+							🤖 تطبيق
+						</button>
+						<button type="button" @click="showCustomPromptModal = false; customPromptText = ''"
+							class="flex-1 py-3 text-sm border-2 border-gray-300 rounded-xl text-gray-600 hover:bg-gray-50 font-bold">إلغاء</button>
+					</div>
+				</div>
+			</div>
 		</div>
 
 		<style>
@@ -355,18 +436,34 @@ templ BlogViewPage(user *database.User, post *database.MarkdownNote) {
 			.blog-content a:hover {
 				color: #EA580C;
 			}
-			.blog-content img {
+			.blog-content img,
+			.blog-content .blog-image {
+				display: block;
 				max-width: 100%;
+				height: auto;
 				border-radius: 8px;
-				margin: 1rem 0;
+				margin: 1rem auto;
 				border: 2px solid #FFECD1;
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 			}
-			.blog-content ul, .blog-content ol {
+			.blog-content ul {
 				margin-bottom: 1rem;
 				padding-right: 1.5rem;
+				list-style-type: disc;
+			}
+			.blog-content ol {
+				margin-bottom: 1rem;
+				padding-right: 1.5rem;
+				list-style-type: decimal;
 			}
 			.blog-content li {
 				margin-bottom: 0.5rem;
+				margin-right: 1rem;
+			}
+			.blog-content hr {
+				border: none;
+				border-top: 2px solid #FFECD1;
+				margin: 1.5rem 0;
 			}
 			.blog-content blockquote {
 				border-right: 4px solid #F97316;
@@ -456,6 +553,8 @@ func renderMarkdown(content string) string {
 	lines := splitLines(content)
 	var result string
 	inCodeBlock := false
+	inUnorderedList := false
+	inOrderedList := false
 
 	for _, line := range lines {
 		// Code blocks
@@ -464,6 +563,15 @@ func renderMarkdown(content string) string {
 				result += "</code></pre>"
 				inCodeBlock = false
 			} else {
+				// Close any open lists
+				if inUnorderedList {
+					result += "</ul>"
+					inUnorderedList = false
+				}
+				if inOrderedList {
+					result += "</ol>"
+					inOrderedList = false
+				}
 				result += "<pre><code>"
 				inCodeBlock = true
 			}
@@ -475,52 +583,190 @@ func renderMarkdown(content string) string {
 			continue
 		}
 
+		// Trim line for checking but keep original for content
+		trimmedLine := trimSpaces(line)
+
 		// Headers
-		if hasPrefix(line, "### ") {
-			result += "<h3>" + escapeHTML(line[4:]) + "</h3>"
+		if hasPrefix(trimmedLine, "### ") {
+			closeOpenLists(&result, &inUnorderedList, &inOrderedList)
+			result += "<h3>" + processInline(trimmedLine[4:]) + "</h3>"
 			continue
 		}
-		if hasPrefix(line, "## ") {
-			result += "<h2>" + escapeHTML(line[3:]) + "</h2>"
+		if hasPrefix(trimmedLine, "## ") {
+			closeOpenLists(&result, &inUnorderedList, &inOrderedList)
+			result += "<h2>" + processInline(trimmedLine[3:]) + "</h2>"
 			continue
 		}
-		if hasPrefix(line, "# ") {
-			result += "<h1>" + escapeHTML(line[2:]) + "</h1>"
+		if hasPrefix(trimmedLine, "# ") {
+			closeOpenLists(&result, &inUnorderedList, &inOrderedList)
+			result += "<h1>" + processInline(trimmedLine[2:]) + "</h1>"
 			continue
 		}
+
+		// Unordered list items (- item or * item)
+		if hasPrefix(trimmedLine, "- ") || hasPrefix(trimmedLine, "* ") {
+			if inOrderedList {
+				result += "</ol>"
+				inOrderedList = false
+			}
+			if !inUnorderedList {
+				result += "<ul>"
+				inUnorderedList = true
+			}
+			result += "<li>" + processInline(trimmedLine[2:]) + "</li>"
+			continue
+		}
+
+		// Ordered list items (1. item, 2. item, etc.)
+		if isOrderedListItem(trimmedLine) {
+			if inUnorderedList {
+				result += "</ul>"
+				inUnorderedList = false
+			}
+			if !inOrderedList {
+				result += "<ol>"
+				inOrderedList = true
+			}
+			// Find the content after "N. "
+			idx := indexOfRune(trimmedLine, '.')
+			if idx != -1 && idx+2 <= len(trimmedLine) {
+				result += "<li>" + processInline(trimmedLine[idx+2:]) + "</li>"
+			}
+			continue
+		}
+
+		// Close lists if we hit a non-list item
+		closeOpenLists(&result, &inUnorderedList, &inOrderedList)
 
 		// Blockquote
-		if hasPrefix(line, "> ") {
-			result += "<blockquote>" + processInline(line[2:]) + "</blockquote>"
+		if hasPrefix(trimmedLine, "> ") {
+			result += "<blockquote>" + processInline(trimmedLine[2:]) + "</blockquote>"
 			continue
 		}
 
-		// Empty line
-		if line == "" {
-			result += "<br>"
+		// Horizontal rule (---, ***, ___, or more)
+		if isHorizontalRule(trimmedLine) {
+			result += "<hr>"
+			continue
+		}
+
+		// Empty line - add spacing
+		if trimmedLine == "" {
+			result += "<div class=\"h-4\"></div>"
+			continue
+		}
+
+		// Check if line is just an image
+		if hasPrefix(trimmedLine, "![") && hasSuffix(trimmedLine, ")") {
+			result += "<div class=\"my-4\">" + processInline(trimmedLine) + "</div>"
 			continue
 		}
 
 		// Regular paragraph
-		result += "<p>" + processInline(line) + "</p>"
+		result += "<p>" + processInline(trimmedLine) + "</p>"
 	}
 
+	// Close any remaining open elements
 	if inCodeBlock {
 		result += "</code></pre>"
 	}
+	closeOpenLists(&result, &inUnorderedList, &inOrderedList)
 
 	return result
 }
 
-func processInline(text string) string {
-	// Escape HTML first
-	text = escapeHTML(text)
+func closeOpenLists(result *string, inUnorderedList *bool, inOrderedList *bool) {
+	if *inUnorderedList {
+		*result += "</ul>"
+		*inUnorderedList = false
+	}
+	if *inOrderedList {
+		*result += "</ol>"
+		*inOrderedList = false
+	}
+}
 
+func isOrderedListItem(line string) bool {
+	// Check if line starts with a number followed by ". "
+	runes := []rune(line)
+	i := 0
+	// Skip digits
+	for i < len(runes) && runes[i] >= '0' && runes[i] <= '9' {
+		i++
+	}
+	// Must have at least one digit, followed by ". "
+	if i > 0 && i+1 < len(runes) && runes[i] == '.' && runes[i+1] == ' ' {
+		return true
+	}
+	return false
+}
+
+func indexOfRune(s string, r rune) int {
+	for i, c := range s {
+		if c == r {
+			return i
+		}
+	}
+	return -1
+}
+
+func trimSpaces(s string) string {
+	runes := []rune(s)
+	start := 0
+	end := len(runes)
+	// Trim leading whitespace
+	for start < end && (runes[start] == ' ' || runes[start] == '\t' || runes[start] == '\r') {
+		start++
+	}
+	// Trim trailing whitespace (including \r for Windows line endings)
+	for end > start && (runes[end-1] == ' ' || runes[end-1] == '\t' || runes[end-1] == '\r') {
+		end--
+	}
+	return string(runes[start:end])
+}
+
+func hasSuffix(s, suffix string) bool {
+	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
+}
+
+// isHorizontalRule checks if a line is a horizontal rule (3+ of -, *, or _)
+func isHorizontalRule(line string) bool {
+	if len(line) < 3 {
+		return false
+	}
+	// Remove all spaces
+	cleaned := ""
+	for _, r := range line {
+		if r != ' ' && r != '\t' {
+			cleaned += string(r)
+		}
+	}
+	if len(cleaned) < 3 {
+		return false
+	}
+	// Check if all characters are the same (-, *, or _)
+	first := rune(cleaned[0])
+	if first != '-' && first != '*' && first != '_' {
+		return false
+	}
+	for _, r := range cleaned {
+		if r != first {
+			return false
+		}
+	}
+	return true
+}
+
+func processInline(text string) string {
+	// Process images and links BEFORE escaping HTML (URLs may contain special chars)
 	// Images: ![alt](url)
 	text = processImages(text)
 
 	// Links: [text](url)
 	text = processLinks(text)
+
+	// Now escape HTML for the remaining text (but not the already-processed HTML tags)
+	text = escapeHTMLSelective(text)
 
 	// Bold: **text**
 	text = processBold(text)
@@ -532,6 +778,50 @@ func processInline(text string) string {
 	text = processInlineCode(text)
 
 	return text
+}
+
+// escapeHTMLSelective escapes HTML but preserves already-created HTML tags
+func escapeHTMLSelective(s string) string {
+	result := ""
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		// Check if we're at an HTML tag we created (img, a)
+		if runes[i] == '<' {
+			// Check if it's one of our tags
+			remaining := string(runes[i:])
+			if hasPrefix(remaining, "<img ") || hasPrefix(remaining, "<a ") ||
+				hasPrefix(remaining, "</a>") {
+				// Find the closing >
+				for i < len(runes) {
+					result += string(runes[i])
+					if runes[i] == '>' {
+						i++
+						break
+					}
+					i++
+				}
+				continue
+			}
+			// Not our tag, escape it
+			result += "&lt;"
+			i++
+			continue
+		}
+		// Escape other special characters
+		switch runes[i] {
+		case '>':
+			result += "&gt;"
+		case '&':
+			result += "&amp;"
+		case '"':
+			result += "&quot;"
+		default:
+			result += string(runes[i])
+		}
+		i++
+	}
+	return result
 }
 
 func processImages(text string) string {
@@ -559,7 +849,7 @@ func processImages(text string) string {
 				if urlEnd != -1 {
 					alt := string(runes[i+2 : altEnd])
 					url := string(runes[altEnd+2 : urlEnd])
-					result += "<img src=\"" + url + "\" alt=\"" + alt + "\" loading=\"lazy\">"
+					result += "<img src=\"" + url + "\" alt=\"" + alt + "\" class=\"blog-image\" loading=\"lazy\">"
 					i = urlEnd + 1
 					continue
 				}
@@ -736,6 +1026,13 @@ func initBlogEditor(post *database.MarkdownNote) string {
 		aiLoadingMessage: 'جاري المعالجة...',
 		showTitlesModal: false,
 		suggestedTitles: [],
+		showPreviewModal: false,
+		showCustomPromptModal: false,
+		originalText: '',
+		suggestedText: '',
+		selectionStart: 0,
+		selectionEnd: 0,
+		customPromptText: '',
 
 		scheduleAutoSave() {
 			this.saveStatus = 'جاري الحفظ...';
@@ -877,6 +1174,11 @@ func initBlogEditor(post *database.MarkdownNote) string {
 
 			const selectedText = this.content.substring(start, end);
 
+			// Save selection info for later use
+			this.selectionStart = start;
+			this.selectionEnd = end;
+			this.originalText = selectedText;
+
 			// Set loading state
 			this.aiLoading = true;
 			this.aiLoadingMessage = action === 'improve' ? 'جاري تحسين النص...' :
@@ -902,24 +1204,101 @@ func initBlogEditor(post *database.MarkdownNote) string {
 					return;
 				}
 
-				// Replace the selected text with the improved version
-				const scrollTop = textarea.scrollTop;
-				this.content = this.content.substring(0, start) + data.text + this.content.substring(end);
-				this.scheduleAutoSave();
-
-				// Restore scroll position
-				requestAnimationFrame(() => {
-					textarea.focus();
-					textarea.scrollTop = scrollTop;
-					const newEnd = start + data.text.length;
-					textarea.setSelectionRange(start, newEnd);
-				});
+				// Show preview modal instead of direct replacement
+				this.suggestedText = data.text;
+				this.showPreviewModal = true;
 
 			} catch (e) {
 				alert('حدث خطأ أثناء التواصل مع الذكاء الاصطناعي');
 				console.error(e);
 			} finally {
 				this.aiLoading = false;
+			}
+		},
+
+		acceptSuggestion() {
+			const textarea = this.$refs.editor;
+			const scrollTop = textarea.scrollTop;
+
+			// Replace the selected text with the suggested version
+			this.content = this.content.substring(0, this.selectionStart) + this.suggestedText + this.content.substring(this.selectionEnd);
+			this.scheduleAutoSave();
+
+			// Close modal and reset state
+			this.showPreviewModal = false;
+
+			// Restore scroll position and selection
+			requestAnimationFrame(() => {
+				textarea.focus();
+				textarea.scrollTop = scrollTop;
+				const newEnd = this.selectionStart + this.suggestedText.length;
+				textarea.setSelectionRange(this.selectionStart, newEnd);
+			});
+		},
+
+		openCustomPromptModal() {
+			const textarea = this.$refs.editor;
+			const start = textarea.selectionStart;
+			const end = textarea.selectionEnd;
+
+			// Check if text is selected
+			if (start === end) {
+				alert('الرجاء تحديد النص الذي تريد تعديله');
+				return;
+			}
+
+			const selectedText = this.content.substring(start, end);
+
+			// Save selection info
+			this.selectionStart = start;
+			this.selectionEnd = end;
+			this.originalText = selectedText;
+			this.customPromptText = '';
+
+			// Show custom prompt modal
+			this.showCustomPromptModal = true;
+		},
+
+		async submitCustomPrompt() {
+			if (!this.customPromptText.trim()) return;
+
+			// Close custom prompt modal
+			this.showCustomPromptModal = false;
+
+			// Set loading state
+			this.aiLoading = true;
+			this.aiLoadingMessage = 'جاري تطبيق التعديل...';
+
+			try {
+				const response = await fetch('/api/ai/fix-text', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						text: this.originalText,
+						action: 'custom',
+						customPrompt: this.customPromptText
+					})
+				});
+
+				const data = await response.json();
+
+				if (data.error) {
+					alert(data.error);
+					return;
+				}
+
+				// Show preview modal
+				this.suggestedText = data.text;
+				this.showPreviewModal = true;
+
+			} catch (e) {
+				alert('حدث خطأ أثناء التواصل مع الذكاء الاصطناعي');
+				console.error(e);
+			} finally {
+				this.aiLoading = false;
+				this.customPromptText = '';
 			}
 		},
 

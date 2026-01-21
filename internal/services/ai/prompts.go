@@ -2,26 +2,37 @@ package ai
 
 // PromptImproveText returns a prompt to improve formatting while keeping the original voice
 func PromptImproveText(text string) string {
-	return `[مهمة: تنسيق نص عربي بـ Markdown]
+	return `[مهمة: تحسين النص بـ Markdown مع الحفاظ على اللهجة]
 
-نسق هذا النص العربي بصيغة Markdown مع الحفاظ على نفس الكلمات.
+حسّن تنسيق النص بصيغة Markdown مع الحفاظ على اللهجة العامية.
 
-التنسيق المطلوب:
-- ## للعناوين الرئيسية
-- ### للعناوين الفرعية
-- **كلمة** للكلمات المهمة فقط (ليس كل النص)
-- - أو 1. للقوائم
-- --- للفصل بين الأقسام
+المطلوب:
+1. تنسيق Markdown:
+   - أضف # للعناوين الرئيسية و ## للفرعية إذا مو موجودة
+   - أضف **نص** للكلمات المهمة
+   - أضف - للقوائم إذا فيه تعداد
+   - رتب الفقرات بشكل منطقي
 
-قواعد:
-- لا تغير الكلمات أو الأسلوب
-- لا تضف كلام من عندك
-- ابدأ مباشرة بالنص المنسق
+2. تصحيح بسيط:
+   - صحح الكلمات الإنجليزية (apple → Apple، macbook → MacBook)
+   - صحح الأخطاء الإملائية الواضحة فقط
+
+مهم جداً - الحفاظ على اللهجة:
+- "شريت" تبقى "شريت" (مو "اشتريت")
+- "وايد" تبقى "وايد" (مو "كثير")
+- "الحين" تبقى "الحين" (مو "الآن")
+- "شنو" تبقى "شنو" (مو "ماذا")
+- "ابي/ابيه" تبقى "ابي/ابيه" (مو "أريد")
+
+ممنوع:
+- تحويل العامية إلى فصحى
+- تغيير أسلوب الكاتب
+- حذف أو إضافة معلومات جديدة
 
 النص:
 ` + text + `
 
-النص المنسق:`
+النص المحسّن:`
 }
 
 // PromptFixErrors returns a prompt to fix only spelling errors without changing style
@@ -64,6 +75,27 @@ func PromptSimplifyText(text string) string {
 ` + text + `
 
 النص المرتب:`
+}
+
+// PromptCustomEdit returns a prompt to apply custom user instructions to text
+func PromptCustomEdit(text string, userInstructions string) string {
+	return `[مهمة: تعديل نص حسب التعليمات]
+
+طبّق التعليمات التالية على النص العربي أدناه.
+
+التعليمات:
+` + userInstructions + `
+
+قواعد:
+- نفذ التعليمات بدقة
+- حافظ على معنى النص الأساسي
+- لا تضف معلومات غير مطلوبة
+- ابدأ مباشرة بالنص المعدل
+
+النص الأصلي:
+` + text + `
+
+النص المعدل:`
 }
 
 // PromptGenerateTitles returns a prompt to generate blog titles
