@@ -26,6 +26,11 @@ const (
 	maxUploadSize = 10 << 20 // 10MB
 )
 
+// isAPIRequest checks if the request is from the native app (API)
+func isAPIRequest(c echo.Context) bool {
+	return strings.HasPrefix(c.Path(), "/api/")
+}
+
 // UploadImages handles multiple image uploads for a day
 func (h *Handler) UploadImages(c echo.Context) error {
 	userID, ok := middleware.GetUserID(c)
@@ -33,22 +38,44 @@ func (h *Handler) UploadImages(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "غير مصرح"})
 	}
 
+	// Parse date - try ISO8601 first (from API), then simple date format (from web)
 	dateStr := c.FormValue("date")
-	date, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
+	var date time.Time
+	var err error
+	
+	if dateStr != "" {
+		// Try ISO8601 format first (2026-01-29T12:00:00Z)
+		date, err = time.Parse(time.RFC3339, dateStr)
+		if err != nil {
+			// Try simple date format (2006-01-02)
+			date, err = time.Parse("2006-01-02", dateStr)
+			if err != nil {
+				date = time.Now()
+			}
+		}
+	} else {
 		date = time.Now()
 	}
+	
+	// Normalize to just the date (no time)
+	date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 
 	// Get multipart form
 	form, err := c.MultipartForm()
 	if err != nil {
 		log.Printf("MultipartForm error: %v", err)
+		if isAPIRequest(c) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"status": "error", "error": "خطأ في قراءة الملفات"})
+		}
 		c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"save_error","type":"error"}}`)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "خطأ في قراءة الملفات"})
 	}
 
 	files := form.File["images"]
 	if len(files) == 0 {
+		if isAPIRequest(c) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"status": "error", "error": "لم يتم اختيار صور"})
+		}
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "لم يتم اختيار صور"})
 	}
 
@@ -59,11 +86,11 @@ func (h *Handler) UploadImages(c echo.Context) error {
 
 	if err := os.MkdirAll(originalsDir, 0755); err != nil {
 		log.Printf("MkdirAll error: %v", err)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "خطأ في إنشاء المجلدات"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"status": "error", "error": "خطأ في إنشاء المجلدات"})
 	}
 	if err := os.MkdirAll(thumbsDir, 0755); err != nil {
 		log.Printf("MkdirAll error: %v", err)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "خطأ في إنشاء المجلدات"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"status": "error", "error": "خطأ في إنشاء المجلدات"})
 	}
 
 	var savedImages []database.DailyImage
@@ -138,13 +165,31 @@ func (h *Handler) UploadImages(c echo.Context) error {
 	}
 
 	if len(savedImages) == 0 {
+		if isAPIRequest(c) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"status": "error", "error": "لم يتم حفظ أي صورة"})
+		}
 		c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"save_error","type":"error"}}`)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "لم يتم حفظ أي صورة"})
 	}
 
-	// Get all images for the day
-	images, _ := h.DB.GetImagesForDay(c.Request().Context(), userID, date)
+	// For API requests, return JSON with the first saved image info
+	if isAPIRequest(c) {
+		img := savedImages[0]
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"status": "success",
+			"image": map[string]interface{}{
+				"id":            img.ID,
+				"original_path":  img.OriginalPath,
+				"thumbnail_path": img.ThumbnailPath,
+				"filename":      img.Filename,
+				"mime_type":      img.MimeType,
+				"size_bytes":     img.SizeBytes,
+			},
+		})
+	}
 
+	// For web requests, return HTML
+	images, _ := h.DB.GetImagesForDay(c.Request().Context(), userID, date)
 	c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"images_saved","type":"success"}}`)
 	return Render(c, http.StatusOK, partials.ImageGallery(images, date))
 }
@@ -178,9 +223,13 @@ func (h *Handler) DeleteImage(c echo.Context) error {
 	os.Remove(strings.TrimPrefix(img.OriginalPath, "/"))
 	os.Remove(strings.TrimPrefix(img.ThumbnailPath, "/"))
 
-	// Get remaining images for the day
-	images, _ := h.DB.GetImagesForDay(c.Request().Context(), userID, date)
+	// For API requests, return JSON
+	if isAPIRequest(c) {
+		return c.JSON(http.StatusOK, map[string]string{"status": "success"})
+	}
 
+	// For web requests, return HTML
+	images, _ := h.DB.GetImagesForDay(c.Request().Context(), userID, date)
 	return Render(c, http.StatusOK, partials.ImageGallery(images, date))
 }
 

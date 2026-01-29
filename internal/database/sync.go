@@ -21,6 +21,7 @@ type SyncAllData struct {
 	WorkoutTemplates  []Workout          `json:"workoutTemplates"`
 	WorkoutLogs       []WorkoutLog       `json:"workoutLogs"`
 	MarkdownNotes     []MarkdownNote     `json:"markdownNotes"`
+	DailyImages       []DailyImage       `json:"dailyImages"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
 
@@ -37,6 +38,7 @@ type SyncChangesData struct {
 	WorkoutTemplates  []Workout          `json:"workoutTemplates,omitempty"`
 	WorkoutLogs       []WorkoutLog       `json:"workoutLogs,omitempty"`
 	MarkdownNotes     []MarkdownNote     `json:"markdownNotes,omitempty"`
+	DailyImages       []DailyImage       `json:"dailyImages,omitempty"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
 
@@ -140,6 +142,13 @@ func (db *DB) GetAllSyncData(ctx context.Context, userID uuid.UUID) (*SyncAllDat
 		return nil, err
 	}
 	data.MarkdownNotes = markdownNotes
+
+	// Get daily images
+	dailyImages, err := db.getAllDailyImages(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data.DailyImages = dailyImages
 
 	return data, nil
 }
@@ -247,6 +256,15 @@ func (db *DB) GetSyncChangesSince(ctx context.Context, userID uuid.UUID, since t
 	}
 	if len(markdownNotes) > 0 {
 		data.MarkdownNotes = markdownNotes
+	}
+
+	// Get daily images
+	dailyImages, err := db.getDailyImagesCreatedSince(ctx, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	if len(dailyImages) > 0 {
+		data.DailyImages = dailyImages
 	}
 
 	return data, nil
@@ -1056,4 +1074,55 @@ func (db *DB) SyncPushMedicationLog(ctx context.Context, userID uuid.UUID, serve
 
 	// Return a composite ID
 	return medID.String() + "_" + logData.Date.Format("2006-01-02"), nil
+}
+
+// getAllDailyImages fetches all daily images for a user (including soft-deleted for sync)
+func (db *DB) getAllDailyImages(ctx context.Context, userID uuid.UUID) ([]DailyImage, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, created_at, deleted_at
+		FROM daily_images WHERE user_id = $1
+		ORDER BY date DESC, created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var images []DailyImage
+	for rows.Next() {
+		var img DailyImage
+		if err := rows.Scan(&img.ID, &img.UserID, &img.Date, &img.OriginalPath, &img.ThumbnailPath, &img.Filename, &img.MimeType, &img.SizeBytes, &img.CreatedAt, &img.DeletedAt); err != nil {
+			return nil, err
+		}
+		img.IsDeleted = img.DeletedAt != nil
+		images = append(images, img)
+	}
+
+	return images, rows.Err()
+}
+
+// getDailyImagesCreatedSince fetches daily images created or deleted since a timestamp
+func (db *DB) getDailyImagesCreatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]DailyImage, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, created_at, deleted_at
+		FROM daily_images 
+		WHERE user_id = $1 AND (created_at > $2 OR deleted_at > $2)
+		ORDER BY date DESC, created_at DESC
+	`, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var images []DailyImage
+	for rows.Next() {
+		var img DailyImage
+		if err := rows.Scan(&img.ID, &img.UserID, &img.Date, &img.OriginalPath, &img.ThumbnailPath, &img.Filename, &img.MimeType, &img.SizeBytes, &img.CreatedAt, &img.DeletedAt); err != nil {
+			return nil, err
+		}
+		img.IsDeleted = img.DeletedAt != nil
+		images = append(images, img)
+	}
+
+	return images, rows.Err()
 }

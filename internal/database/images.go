@@ -28,14 +28,14 @@ func (db *DB) SaveDailyImage(ctx context.Context, userID uuid.UUID, date time.Ti
 	return &img, nil
 }
 
-// GetImagesForDay retrieves all images for a specific day
+// GetImagesForDay retrieves all non-deleted images for a specific day
 func (db *DB) GetImagesForDay(ctx context.Context, userID uuid.UUID, date time.Time) ([]DailyImage, error) {
 	dateStr := date.Format("2006-01-02")
 
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, created_at
 		FROM daily_images
-		WHERE user_id = $1 AND date = $2
+		WHERE user_id = $1 AND date = $2 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 	`, userID, dateStr)
 	if err != nil {
@@ -56,16 +56,17 @@ func (db *DB) GetImagesForDay(ctx context.Context, userID uuid.UUID, date time.T
 	return images, rows.Err()
 }
 
-// DeleteDailyImage deletes an image record
+// DeleteDailyImage soft-deletes an image record by setting deleted_at
 func (db *DB) DeleteDailyImage(ctx context.Context, imageID, userID uuid.UUID) (*DailyImage, error) {
 	var img DailyImage
 	err := db.Pool.QueryRow(ctx, `
-		DELETE FROM daily_images
-		WHERE id = $1 AND user_id = $2
-		RETURNING id, user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, created_at
+		UPDATE daily_images
+		SET deleted_at = NOW()
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+		RETURNING id, user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, created_at, deleted_at
 	`, imageID, userID).Scan(
 		&img.ID, &img.UserID, &img.Date, &img.OriginalPath, &img.ThumbnailPath,
-		&img.Filename, &img.MimeType, &img.SizeBytes, &img.CreatedAt,
+		&img.Filename, &img.MimeType, &img.SizeBytes, &img.CreatedAt, &img.DeletedAt,
 	)
 
 	if err != nil {

@@ -32,7 +32,9 @@ type Habit struct {
 	UserID        uuid.UUID `json:"user_id"`
 	Name          string    `json:"name"`
 	ScheduledDays []string  `json:"scheduled_days"` // Day names: "Sunday", "Monday", etc.
-	CreatedAt     time.Time `json:"created_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
+	IsDeleted     bool       `json:"is_deleted"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
@@ -151,7 +153,9 @@ type DailyImage struct {
 	Filename      string    `json:"filename"`
 	MimeType      string    `json:"mime_type"`
 	SizeBytes     int       `json:"size_bytes"`
-	CreatedAt     time.Time `json:"created_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
+	IsDeleted     bool       `json:"is_deleted"`
 }
 
 // Workout represents a workout plan
@@ -324,6 +328,8 @@ type MonthlySummary struct {
 	Month         int       `json:"month"`
 	SummaryText   string    `json:"summary_text"`
 	IsAIGenerated bool      `json:"is_ai_generated"`
-	CreatedAt     time.Time `json:"created_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
+	IsDeleted     bool       `json:"is_deleted"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

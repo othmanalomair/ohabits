@@ -174,6 +174,10 @@ func main() {
 	protected.GET("/api/auth/validate", h.ValidateToken)
 	protected.POST("/api/auth/refresh", h.RefreshToken)
 
+	// Images API (للتطبيق الأصلي)
+	protected.POST("/api/images", h.UploadImages)
+	protected.DELETE("/api/images/:id", h.DeleteImage)
+
 	// Start server
 	go func() {
 		addr := ":" + cfg.Port
