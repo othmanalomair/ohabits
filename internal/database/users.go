@@ -13,6 +13,7 @@ var (
 	ErrUserNotFound    = errors.New("user not found")
 	ErrEmailExists     = errors.New("email already exists")
 	ErrInvalidPassword = errors.New("invalid password")
+	ErrAppleIDExists   = errors.New("apple id already exists")
 )
 
 // CreateUser creates a new user
@@ -46,10 +47,10 @@ func (db *DB) CreateUser(ctx context.Context, email, password, displayName strin
 func (db *DB) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, email, password, display_name, avatar_url, created_at, updated_at
+		SELECT id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
 		FROM users WHERE email = $1
 	`, email).Scan(
-		&user.ID, &user.Email, &user.Password, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -66,10 +67,10 @@ func (db *DB) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 func (db *DB) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, email, password, display_name, avatar_url, created_at, updated_at
+		SELECT id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
 		FROM users WHERE id = $1
 	`, id).Scan(
-		&user.ID, &user.Email, &user.Password, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -142,4 +143,57 @@ func (db *DB) CheckEmailExists(ctx context.Context, email string, excludeUserID 
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// GetUserByAppleID retrieves a user by Apple ID
+func (db *DB) GetUserByAppleID(ctx context.Context, appleID string) (*User, error) {
+	var user User
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
+		FROM users WHERE apple_id = $1
+	`, appleID).Scan(
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// CreateAppleUser creates a new user from Apple Sign-In
+func (db *DB) CreateAppleUser(ctx context.Context, appleID, email, displayName string) (*User, error) {
+	var user User
+	err := db.Pool.QueryRow(ctx, `
+		INSERT INTO users (email, password, apple_id, display_name)
+		VALUES ($1, '', $2, $3)
+		RETURNING id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
+	`, email, appleID, displayName).Scan(
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err.Error() == `ERROR: duplicate key value violates unique constraint "users_email_key" (SQLSTATE 23505)` {
+			return nil, ErrEmailExists
+		}
+		if err.Error() == `ERROR: duplicate key value violates unique constraint "users_apple_id_key" (SQLSTATE 23505)` {
+			return nil, ErrAppleIDExists
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// LinkAppleID links an Apple ID to an existing user
+func (db *DB) LinkAppleID(ctx context.Context, userID uuid.UUID, appleID string) error {
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE users SET apple_id = $2, updated_at = NOW()
+		WHERE id = $1
+	`, userID, appleID)
+	return err
 }

@@ -52,13 +52,11 @@ func (h *Handler) Login(c echo.Context) error {
 }
 
 // SignupPage renders the signup page
-// التسجيل مغلق - يتم التحويل لصفحة تسجيل الدخول
 func (h *Handler) SignupPage(c echo.Context) error {
 	return Render(c, http.StatusOK, pages.Login("التسجيل مغلق حالياً", ""))
 }
 
 // Signup handles signup form submission
-// التسجيل مغلق
 func (h *Handler) Signup(c echo.Context) error {
 	return Render(c, http.StatusOK, pages.Login("التسجيل مغلق حالياً", ""))
 }
@@ -67,4 +65,54 @@ func (h *Handler) Signup(c echo.Context) error {
 func (h *Handler) Logout(c echo.Context) error {
 	middleware.ClearAuthCookie(c)
 	return c.Redirect(http.StatusSeeOther, "/login")
+}
+
+// APILogin handles API-based email/password login for native apps
+func (h *Handler) APILogin(c echo.Context) error {
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request body",
+		})
+	}
+
+	if req.Email == "" || req.Password == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Email and password are required",
+		})
+	}
+
+	user, err := h.DB.AuthenticateUser(c.Request().Context(), req.Email, req.Password)
+	if err != nil {
+		if err == database.ErrUserNotFound || err == database.ErrInvalidPassword {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"error": "Invalid email or password",
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Authentication failed",
+		})
+	}
+
+	// Generate JWT token
+	token, err := h.Auth.GenerateToken(user.ID, user.Email)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to generate token",
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"token": token,
+		"user": map[string]interface{}{
+			"id":       user.ID,
+			"email":    user.Email,
+			"fullName": user.DisplayName,
+		},
+		"isNewUser": false,
+	})
 }

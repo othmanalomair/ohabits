@@ -158,7 +158,7 @@ func (db *DB) ToggleMedicationLog(ctx context.Context, userID, medicationID uuid
 	// Toggle existing record
 	newStatus := !taken
 	_, err = db.Pool.Exec(ctx, `
-		UPDATE medication_logs SET taken = $3
+		UPDATE medication_logs SET taken = $3, updated_at = NOW()
 		WHERE medication_id = $1 AND date = $2
 	`, medicationID, dateStr, newStatus)
 
@@ -208,4 +208,18 @@ func (db *DB) GetMedicationByID(ctx context.Context, medicationID uuid.UUID) (*M
 
 	json.Unmarshal(daysJSON, &m.ScheduledDays)
 	return &m, nil
+}
+
+// UpsertMedicationLog sets the medication log status directly (for sync)
+func (db *DB) UpsertMedicationLog(ctx context.Context, userID, medicationID uuid.UUID, date time.Time, taken bool) error {
+	dateStr := date.Format("2006-01-02")
+
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO medication_logs (medication_id, user_id, taken, date)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (medication_id, date)
+		DO UPDATE SET taken = $3
+	`, medicationID, userID, taken, dateStr)
+
+	return err
 }

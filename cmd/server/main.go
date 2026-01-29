@@ -83,6 +83,10 @@ func main() {
 	e.POST("/signup", h.Signup)
 	e.GET("/logout", h.Logout)
 
+	// Apple Sign-In (public - for native app authentication)
+	e.POST("/api/auth/apple", h.AppleSignIn)
+	e.POST("/api/auth/login", h.APILogin)
+
 	// Protected routes
 	protected := e.Group("")
 	protected.Use(auth.RequireAuth)
@@ -158,6 +162,17 @@ func main() {
 	// Monthly Summary (ملخص الشهر)
 	protected.GET("/api/monthly-summary", h.GetMonthlySummary)
 	protected.POST("/api/monthly-summary/save", h.SaveMonthlySummary)
+
+	// Sync API (للتطبيق الأصلي iOS/macOS)
+	protected.GET("/api/sync/all", h.SyncAll)
+	protected.POST("/api/sync/push", h.SyncPush)
+	protected.POST("/api/sync/changes", h.SyncChanges)
+	protected.GET("/api/sync/status", h.SyncStatus)
+
+	// User API (للتطبيق الأصلي)
+	protected.GET("/api/user/info", h.UserInfo)
+	protected.GET("/api/auth/validate", h.ValidateToken)
+	protected.POST("/api/auth/refresh", h.RefreshToken)
 
 	// Start server
 	go func() {

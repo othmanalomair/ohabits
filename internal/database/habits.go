@@ -130,9 +130,23 @@ func (db *DB) ToggleHabitCompletion(ctx context.Context, userID, habitID uuid.UU
 	// Toggle existing record
 	newStatus := !completed
 	_, err = db.Pool.Exec(ctx, `
-		UPDATE habits_completions SET completed = $3
+		UPDATE habits_completions SET completed = $3, updated_at = NOW()
 		WHERE habit_id = $1 AND date = $2
 	`, habitID, dateStr, newStatus)
 
 	return newStatus, err
+}
+
+// UpsertHabitCompletion sets the habit completion status directly (for sync)
+func (db *DB) UpsertHabitCompletion(ctx context.Context, userID, habitID uuid.UUID, date time.Time, completed bool) error {
+	dateStr := date.Format("2006-01-02")
+
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO habits_completions (habit_id, user_id, completed, date)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (habit_id, date)
+		DO UPDATE SET completed = $3
+	`, habitID, userID, completed, dateStr)
+
+	return err
 }

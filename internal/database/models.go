@@ -10,7 +10,8 @@ import (
 type User struct {
 	ID          uuid.UUID `json:"id"`
 	Email       string    `json:"email"`
-	Password    string    `json:"-"` // Never expose password
+	Password    string    `json:"-"`          // Never expose password
+	AppleID     *string   `json:"apple_id"`   // Apple Sign-In identifier
 	DisplayName string    `json:"display_name"`
 	AvatarURL   *string   `json:"avatar_url"` // nullable
 	CreatedAt   time.Time `json:"created_at"`
@@ -118,6 +119,7 @@ type Todo struct {
 	Date      time.Time `json:"date"`
 	CreatedAt time.Time `json:"created_at"`
 	IsOverdue bool      `json:"is_overdue"` // true if task is from a past date
+	IsDeleted bool      `json:"is_deleted"` // true if todo was deleted
 }
 
 // Note represents a daily quick note
@@ -196,9 +198,11 @@ type MarkdownNote struct {
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	IsRTL     bool      `json:"is_rtl"`
+	IsDeleted bool      `json:"is_deleted"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
 
 // Show represents a TV show or anime
 type Show struct {

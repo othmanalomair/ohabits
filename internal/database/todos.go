@@ -16,7 +16,7 @@ func (db *DB) GetTodosForDay(ctx context.Context, userID uuid.UUID, date time.Ti
 		SELECT id, user_id, text, completed, date, created_at,
 			   (date < $2 AND completed = false) as is_overdue
 		FROM todos
-		WHERE user_id = $1 AND (date = $2 OR (date < $2 AND completed = false))
+		WHERE user_id = $1 AND is_deleted = false AND (date = $2 OR (date < $2 AND completed = false))
 		ORDER BY is_overdue DESC, date ASC, created_at ASC
 	`, userID, dateStr)
 	if err != nil {
@@ -58,7 +58,7 @@ func (db *DB) CreateTodo(ctx context.Context, userID uuid.UUID, text string, dat
 func (db *DB) ToggleTodo(ctx context.Context, todoID uuid.UUID) (bool, error) {
 	var completed bool
 	err := db.Pool.QueryRow(ctx, `
-		UPDATE todos SET completed = NOT completed
+		UPDATE todos SET completed = NOT completed, updated_at = NOW()
 		WHERE id = $1
 		RETURNING completed
 	`, todoID).Scan(&completed)
@@ -68,7 +68,7 @@ func (db *DB) ToggleTodo(ctx context.Context, todoID uuid.UUID) (bool, error) {
 
 // DeleteTodo deletes a todo
 func (db *DB) DeleteTodo(ctx context.Context, todoID uuid.UUID) error {
-	_, err := db.Pool.Exec(ctx, `DELETE FROM todos WHERE id = $1`, todoID)
+	_, err := db.Pool.Exec(ctx, `UPDATE todos SET is_deleted = true, updated_at = NOW() WHERE id = $1`, todoID)
 	return err
 }
 
@@ -85,7 +85,7 @@ func (db *DB) GetTodosForDayOnly(ctx context.Context, userID uuid.UUID, date tim
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, user_id, text, completed, date, created_at, false as is_overdue
 		FROM todos
-		WHERE user_id = $1 AND date = $2
+		WHERE user_id = $1 AND date = $2 AND is_deleted = false
 		ORDER BY created_at ASC
 	`, userID, dateStr)
 	if err != nil {
@@ -103,4 +103,10 @@ func (db *DB) GetTodosForDayOnly(ctx context.Context, userID uuid.UUID, date tim
 	}
 
 	return todos, rows.Err()
+}
+
+// UpdateTodoWithCompleted updates a todo text and completed status
+func (db *DB) UpdateTodoWithCompleted(ctx context.Context, todoID uuid.UUID, text string, completed bool) error {
+	_, err := db.Pool.Exec(ctx, `UPDATE todos SET text = $2, completed = $3, updated_at = NOW() WHERE id = $1`, todoID, text, completed)
+	return err
 }
