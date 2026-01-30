@@ -12,7 +12,7 @@ func (db *DB) GetCalendarEventsByUserID(ctx context.Context, userID uuid.UUID) (
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, user_id, title, event_type, event_date, end_date, is_recurring, notes, created_at, updated_at
 		FROM calendar_events
-		WHERE user_id = $1
+		WHERE user_id = $1 AND is_deleted = false
 		ORDER BY EXTRACT(MONTH FROM event_date), EXTRACT(DAY FROM event_date)
 	`, userID)
 	if err != nil {
@@ -41,7 +41,7 @@ func (db *DB) GetCalendarEventsByType(ctx context.Context, userID uuid.UUID, eve
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, user_id, title, event_type, event_date, end_date, is_recurring, notes, created_at, updated_at
 		FROM calendar_events
-		WHERE user_id = $1 AND event_type = $2
+		WHERE user_id = $1 AND event_type = $2 AND is_deleted = false
 		ORDER BY EXTRACT(MONTH FROM event_date), EXTRACT(DAY FROM event_date)
 	`, userID, eventType)
 	if err != nil {
@@ -73,7 +73,7 @@ func (db *DB) GetCalendarEventsForDay(ctx context.Context, userID uuid.UUID, dat
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, user_id, title, event_type, event_date, end_date, is_recurring, notes, created_at, updated_at
 		FROM calendar_events
-		WHERE user_id = $1 AND (
+		WHERE user_id = $1 AND is_deleted = false AND (
 			-- Single day events (no end_date)
 			(end_date IS NULL AND (
 				(is_recurring = true AND EXTRACT(MONTH FROM event_date) = $2 AND EXTRACT(DAY FROM event_date) = $3)
@@ -134,7 +134,7 @@ func (db *DB) GetDatesWithEventsForWeek(ctx context.Context, userID uuid.UUID, w
 		err := db.Pool.QueryRow(ctx, `
 			SELECT COUNT(*)
 			FROM calendar_events
-			WHERE user_id = $1 AND (
+			WHERE user_id = $1 AND is_deleted = false AND (
 				-- Single day events
 				(end_date IS NULL AND (
 					(is_recurring = true AND EXTRACT(MONTH FROM event_date) = $2 AND EXTRACT(DAY FROM event_date) = $3)
@@ -223,6 +223,6 @@ func (db *DB) UpdateCalendarEvent(ctx context.Context, eventID uuid.UUID, title,
 
 // DeleteCalendarEvent deletes a calendar event
 func (db *DB) DeleteCalendarEvent(ctx context.Context, eventID uuid.UUID) error {
-	_, err := db.Pool.Exec(ctx, `DELETE FROM calendar_events WHERE id = $1`, eventID)
+	_, err := db.Pool.Exec(ctx, `UPDATE calendar_events SET is_deleted = true, updated_at = NOW() WHERE id = $1`, eventID)
 	return err
 }

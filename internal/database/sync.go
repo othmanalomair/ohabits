@@ -593,7 +593,7 @@ func (db *DB) getTodosCreatedSince(ctx context.Context, userID uuid.UUID, since 
 
 func (db *DB) getEventsUpdatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]CalendarEvent, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, title, event_type, event_date, end_date, is_recurring, notes, created_at, updated_at
+		SELECT id, user_id, title, event_type, event_date, end_date, is_recurring, notes, created_at, updated_at, is_deleted
 		FROM calendar_events
 		WHERE user_id = $1 AND updated_at > $2
 		ORDER BY event_date
@@ -607,7 +607,7 @@ func (db *DB) getEventsUpdatedSince(ctx context.Context, userID uuid.UUID, since
 	for rows.Next() {
 		var e CalendarEvent
 		var notes *string
-		if err := rows.Scan(&e.ID, &e.UserID, &e.Title, &e.EventType, &e.EventDate, &e.EndDate, &e.IsRecurring, &notes, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.UserID, &e.Title, &e.EventType, &e.EventDate, &e.EndDate, &e.IsRecurring, &notes, &e.CreatedAt, &e.UpdatedAt, &e.IsDeleted); err != nil {
 			return nil, err
 		}
 		if notes != nil {

@@ -282,6 +282,7 @@ type CalendarEvent struct {
 	Notes       string     `json:"notes"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
+	IsDeleted   bool       `json:"is_deleted"`
 }
 
 // HasDateRange returns true if the event spans multiple days
