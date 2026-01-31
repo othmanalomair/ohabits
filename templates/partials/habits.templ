@@ -23,9 +23,17 @@ templ HabitItem(habit database.HabitWithCompletion, date time.Time, completed bo
 		id={ "habit-" + habit.ID.String() }
 		class={ "med-item flex items-center justify-between p-3 md:p-4", templ.KV("taken", completed) }
 	>
-		<span class={ "font-semibold text-sm md:text-base", templ.KV("text-retro-dark", !completed), templ.KV("line-through text-gray-400", completed) }>
-			{ habit.Name }
-		</span>
+		<div class="flex items-center gap-3">
+			<!-- Icon -->
+			<div class={ "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0", templ.KV("bg-primary-100 text-primary-600", !completed), templ.KV("bg-gray-100 text-gray-400", completed) }>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					@templ.Raw(GetIconSVG(habit.Icon))
+				</svg>
+			</div>
+			<span class={ "font-semibold text-sm md:text-base", templ.KV("text-retro-dark", !completed), templ.KV("line-through text-gray-400", completed) }>
+				{ habit.Name }
+			</span>
+		</div>
 
 		<form
 			hx-post={ "/habits/" + habit.ID.String() + "/toggle" }

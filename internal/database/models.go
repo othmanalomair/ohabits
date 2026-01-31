@@ -31,6 +31,7 @@ type Habit struct {
 	ID            uuid.UUID `json:"id"`
 	UserID        uuid.UUID `json:"user_id"`
 	Name          string    `json:"name"`
+	Icon          string    `json:"icon"`
 	ScheduledDays []string  `json:"scheduled_days"` // Day names: "Sunday", "Monday", etc.
 	CreatedAt     time.Time  `json:"created_at"`
 	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
@@ -91,7 +92,9 @@ type Medication struct {
 	StartDate     *time.Time `json:"start_date"`
 	EndDate       *time.Time `json:"end_date"`
 	Notes         string     `json:"notes"`
+	Icon          string     `json:"icon"`
 	IsActive      bool       `json:"is_active"`
+	IsDeleted     bool       `json:"is_deleted"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
@@ -102,6 +105,7 @@ type MedicationLog struct {
 	MedicationID uuid.UUID `json:"medication_id"`
 	UserID       uuid.UUID `json:"user_id"`
 	Taken        bool      `json:"taken"`
+	DoseNumber   int       `json:"dose_number"`
 	Date         time.Time `json:"date"`
 	CreatedAt    time.Time `json:"created_at"`
 }
@@ -301,7 +305,7 @@ type CalendarEventForDay struct {
 type DashboardData struct {
 	Date           time.Time
 	Habits         []HabitWithCompletion
-	Medications    []MedicationWithLog
+	Medications    []MedicationWithDoses
 	Todos          []Todo
 	Note           *Note
 	Images         []DailyImage

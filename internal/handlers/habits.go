@@ -90,7 +90,12 @@ func (h *Handler) CreateHabit(c echo.Context) error {
 		}
 	}
 
-	_, err := h.DB.CreateHabit(c.Request().Context(), userID, name, scheduledDays)
+	icon := c.FormValue("icon")
+	if icon == "" {
+		icon = "checkmark.circle.fill"
+	}
+
+	_, err := h.DB.CreateHabit(c.Request().Context(), userID, name, icon, scheduledDays)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
@@ -137,7 +142,7 @@ func (h *Handler) DeleteHabit(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "معرف غير صالح"})
 	}
 
-	if err := h.DB.DeleteHabit(c.Request().Context(), habitID); err != nil {
+	if err := h.DB.SoftDeleteHabit(c.Request().Context(), habitID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 
@@ -184,7 +189,12 @@ func (h *Handler) UpdateHabit(c echo.Context) error {
 		}
 	}
 
-	if err := h.DB.UpdateHabit(c.Request().Context(), habitID, name, scheduledDays); err != nil {
+	icon := c.FormValue("icon")
+	if icon == "" {
+		icon = "checkmark.circle.fill"
+	}
+
+	if err := h.DB.UpdateHabit(c.Request().Context(), habitID, name, icon, scheduledDays); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 

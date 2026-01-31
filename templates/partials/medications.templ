@@ -7,35 +7,104 @@ import (
 	"ohabits/internal/database"
 )
 
-templ MedicationsList(medications []database.MedicationWithLog, date time.Time) {
+// SF Symbol to emoji mapping for web display
+var partialMedIconToEmoji = map[string]string{
+	"pill.fill":                "💊",
+	"pills.fill":               "💊",
+	"cross.case.fill":          "🏥",
+	"syringe.fill":             "💉",
+	"drop.fill":                "💧",
+	"ivfluid.bag.fill":         "🩸",
+	"bandage.fill":             "🩹",
+	"medical.thermometer.fill": "🌡️",
+	"heart.fill":               "❤️",
+	"lungs.fill":               "🫁",
+	"brain.head.profile":       "🧠",
+	"eye.fill":                 "👁️",
+	"ear.fill":                 "👂",
+	"hand.raised.fill":         "✋",
+	"figure.walk":              "🚶",
+	"sun.max.fill":             "☀️",
+	"moon.fill":                "🌙",
+	"leaf.fill":                "🍃",
+	"flask.fill":               "🧪",
+	"testtube.2":               "🧫",
+}
+
+// getPartialMedIconEmoji returns the emoji for an SF Symbol name
+func getPartialMedIconEmoji(icon string) string {
+	if emoji, ok := partialMedIconToEmoji[icon]; ok {
+		return emoji
+	}
+	return "💊" // default
+}
+
+// allDosesTaken checks if all doses are taken
+func allDosesTaken(doseTaken []bool) bool {
+	for _, taken := range doseTaken {
+		if !taken {
+			return false
+		}
+	}
+	return len(doseTaken) > 0
+}
+
+// countTakenDoses counts how many doses are taken
+func countTakenDoses(doseTaken []bool) int {
+	count := 0
+	for _, taken := range doseTaken {
+		if taken {
+			count++
+		}
+	}
+	return count
+}
+
+// getNextDoseNumber returns the next dose to take (1-based), or 0 if all taken
+func getNextDoseNumber(doseTaken []bool) int {
+	for i, taken := range doseTaken {
+		if !taken {
+			return i + 1
+		}
+	}
+	return 0 // all taken, will reset
+}
+
+templ MedicationsList(medications []database.MedicationWithDoses, date time.Time) {
 	if len(medications) == 0 {
 		<p class="text-gray-400 text-center py-4 text-sm md:text-base">لا توجد أدوية لهذا اليوم</p>
 	} else {
 		<div class="space-y-2 md:space-y-3">
 			for _, med := range medications {
-				@MedicationItem(med, date, med.Taken)
+				@MedicationItem(med, date, allDosesTaken(med.DoseTaken), 0)
 			}
 		</div>
 	}
 }
 
-templ MedicationItem(med database.MedicationWithLog, date time.Time, taken bool) {
+templ MedicationItem(med database.MedicationWithDoses, date time.Time, taken bool, toggledDose int) {
 	<div
 		id={ "med-" + med.ID.String() }
 		class={ "med-item flex items-center justify-between gap-2 p-3 md:p-4", templ.KV("taken", taken) }
 	>
-		<div class="flex-1 min-w-0">
-			<span class="font-bold text-retro-dark text-sm md:text-base block truncate">{ med.Name }</span>
-			<div class="flex flex-wrap gap-1 md:gap-2 mt-1">
-				if med.Dosage != "" {
-					<span class="retro-badge text-xs">{ med.Dosage }</span>
-				}
-				<span class="retro-badge text-xs">
-					{ getTimesText(med.TimesPerDay) }
-				</span>
-				if med.DurationType == "lifetime" {
-					<span class="retro-badge text-xs">مستمر</span>
-				}
+		<div class="flex items-center gap-3 flex-1 min-w-0">
+			<!-- Icon -->
+			<div class={ "w-10 h-10 flex items-center justify-center rounded-lg text-xl flex-shrink-0", templ.KV("bg-green-100", taken), templ.KV("bg-primary-100", !taken) }>
+				{ getPartialMedIconEmoji(med.Icon) }
+			</div>
+			<div class="flex-1 min-w-0">
+				<span class="font-bold text-retro-dark text-sm md:text-base block truncate">{ med.Name }</span>
+				<div class="flex flex-wrap gap-1 md:gap-2 mt-1">
+					if med.Dosage != "" {
+						<span class="retro-badge text-xs">{ med.Dosage }</span>
+					}
+					<span class="retro-badge text-xs">
+						{ getTimesText(med.TimesPerDay) }
+					</span>
+					if med.DurationType == "lifetime" {
+						<span class="retro-badge text-xs">مستمر</span>
+					}
+				</div>
 			</div>
 		</div>
 
@@ -46,13 +115,25 @@ templ MedicationItem(med database.MedicationWithLog, date time.Time, taken bool)
 			class="flex-shrink-0"
 		>
 			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
-			<button type="submit" class={ "anime-btn px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm whitespace-nowrap", templ.KV("anime-btn-success", taken) }>
-				if taken {
+			if taken {
+				<!-- All doses taken, next click will reset (dose_number=0 means reset) -->
+				<input type="hidden" name="dose_number" value="0"/>
+				<button type="submit" class="anime-btn anime-btn-success px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm whitespace-nowrap">
 					✓ تم
-				} else {
+				</button>
+			} else if med.TimesPerDay > 1 {
+				<!-- Multiple doses - show progress and mark next dose -->
+				<input type="hidden" name="dose_number" value={ fmt.Sprintf("%d", getNextDoseNumber(med.DoseTaken)) }/>
+				<button type="submit" class="anime-btn px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm whitespace-nowrap">
+					{ fmt.Sprintf("%d/%d", countTakenDoses(med.DoseTaken), med.TimesPerDay) }
+				</button>
+			} else {
+				<!-- Single dose -->
+				<input type="hidden" name="dose_number" value="1"/>
+				<button type="submit" class="anime-btn px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm whitespace-nowrap">
 					خذها
-				}
-			</button>
+				</button>
+			}
 		</form>
 	</div>
 }

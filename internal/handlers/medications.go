@@ -29,12 +29,12 @@ func (h *Handler) MedicationsPage(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	medications, _ := h.DB.GetAllMedications(c.Request().Context(), userID)
+	medications, _ := h.DB.GetActiveMedications(c.Request().Context(), userID)
 
 	return Render(c, http.StatusOK, pages.MedicationsPage(user, medications))
 }
 
-// ToggleMedication toggles medication taken status
+// ToggleMedication toggles a specific dose of a medication
 func (h *Handler) ToggleMedication(c echo.Context) error {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
@@ -53,18 +53,46 @@ func (h *Handler) ToggleMedication(c echo.Context) error {
 		date = time.Now()
 	}
 
-	taken, err := h.DB.ToggleMedicationLog(c.Request().Context(), userID, medID, date)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
+	// Get dose number (1-based, 0 means reset all)
+	doseNumber := 1
+	if dn := c.FormValue("dose_number"); dn != "" {
+		doseNumber, _ = strconv.Atoi(dn)
+	}
+
+	ctx := c.Request().Context()
+
+	if doseNumber == 0 {
+		// Reset all doses - get medication to know how many doses
+		med, err := h.DB.GetMedicationByID(ctx, medID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
+		}
+		// Set all doses to false
+		for i := 1; i <= med.TimesPerDay; i++ {
+			h.DB.UpsertMedicationLog(ctx, userID, medID, date, false, i)
+		}
+	} else {
+		// Toggle specific dose
+		_, err = h.DB.ToggleMedicationLog(ctx, userID, medID, date, doseNumber)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
+		}
 	}
 
 	// Get updated medications
-	medications, _ := h.DB.GetMedicationsForDay(c.Request().Context(), userID, date)
+	medications, _ := h.DB.GetMedicationsForDay(ctx, userID, date)
 
 	// Find the toggled medication
 	for _, med := range medications {
 		if med.ID == medID {
-			return Render(c, http.StatusOK, partials.MedicationItem(med, date, taken))
+			allTaken := true
+			for _, taken := range med.DoseTaken {
+				if !taken {
+					allTaken = false
+					break
+				}
+			}
+			return Render(c, http.StatusOK, partials.MedicationItem(med, date, allTaken, doseNumber))
 		}
 	}
 
@@ -81,6 +109,10 @@ func (h *Handler) CreateMedication(c echo.Context) error {
 	name := c.FormValue("name")
 	dosage := c.FormValue("dosage")
 	notes := c.FormValue("notes")
+	icon := c.FormValue("icon")
+	if icon == "" {
+		icon = "pill.fill"
+	}
 	durationType := c.FormValue("duration_type")
 
 	if name == "" {
@@ -135,7 +167,7 @@ func (h *Handler) CreateMedication(c echo.Context) error {
 		}
 	}
 
-	_, err := h.DB.CreateMedication(c.Request().Context(), userID, name, dosage, scheduledDays, timesPerDay, durationType, startDate, endDate, notes)
+	_, err := h.DB.CreateMedication(c.Request().Context(), userID, name, dosage, scheduledDays, timesPerDay, durationType, startDate, endDate, notes, icon)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ: " + err.Error()})
 	}
@@ -145,7 +177,7 @@ func (h *Handler) CreateMedication(c echo.Context) error {
 	// Check if request is from medications management page
 	referer := c.Request().Referer()
 	if strings.Contains(referer, "/medications") {
-		medications, _ := h.DB.GetAllMedications(c.Request().Context(), userID)
+		medications, _ := h.DB.GetActiveMedications(c.Request().Context(), userID)
 		return Render(c, http.StatusOK, pages.MedicationsManageList(medications))
 	}
 
@@ -172,6 +204,10 @@ func (h *Handler) UpdateMedication(c echo.Context) error {
 	name := c.FormValue("name")
 	dosage := c.FormValue("dosage")
 	notes := c.FormValue("notes")
+	icon := c.FormValue("icon")
+	if icon == "" {
+		icon = "pill.fill"
+	}
 	durationType := c.FormValue("duration_type")
 	isActive := c.FormValue("is_active") == "on"
 
@@ -227,7 +263,7 @@ func (h *Handler) UpdateMedication(c echo.Context) error {
 		}
 	}
 
-	if err := h.DB.UpdateMedication(c.Request().Context(), medID, name, dosage, scheduledDays, timesPerDay, durationType, startDate, endDate, notes, isActive); err != nil {
+	if err := h.DB.UpdateMedication(c.Request().Context(), medID, name, dosage, scheduledDays, timesPerDay, durationType, startDate, endDate, notes, icon, isActive); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ: " + err.Error()})
 	}
 
@@ -237,7 +273,7 @@ func (h *Handler) UpdateMedication(c echo.Context) error {
 	med, err := h.DB.GetMedicationByID(c.Request().Context(), medID)
 	if err != nil {
 		// Fallback to list
-		medications, _ := h.DB.GetAllMedications(c.Request().Context(), userID)
+		medications, _ := h.DB.GetActiveMedications(c.Request().Context(), userID)
 		return Render(c, http.StatusOK, pages.MedicationsManageList(medications))
 	}
 
@@ -264,7 +300,7 @@ func (h *Handler) DeleteMedication(c echo.Context) error {
 	// Check if request is from medications management page
 	referer := c.Request().Referer()
 	if strings.Contains(referer, "/medications") {
-		medications, _ := h.DB.GetAllMedications(c.Request().Context(), userID)
+		medications, _ := h.DB.GetActiveMedications(c.Request().Context(), userID)
 		c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"med_deleted","type":"success"}}`)
 		return Render(c, http.StatusOK, pages.MedicationsManageList(medications))
 	}

@@ -1,0 +1,88 @@
+package partials
+
+// SF Symbol icons available for medications (matching iOS app)
+var MedIconOptions = []string{
+    "pill.fill",
+    "pills.fill",
+    "cross.case.fill",
+    "syringe.fill",
+    "drop.fill",
+    "ivfluid.bag.fill",
+    "bandage.fill",
+    "medical.thermometer.fill",
+    "heart.fill",
+    "lungs.fill",
+    "brain.head.profile",
+    "eye.fill",
+    "ear.fill",
+    "hand.raised.fill",
+    "figure.walk",
+    "sun.max.fill",
+    "moon.fill",
+    "leaf.fill",
+    "flask.fill",
+    "testtube.2",
+}
+
+// Map SF Symbol names to emoji/unicode equivalents for web display
+var iconToEmoji = map[string]string{
+    "pill.fill":                "💊",
+    "pills.fill":               "💊💊",
+    "cross.case.fill":          "🏥",
+    "syringe.fill":             "💉",
+    "drop.fill":                "💧",
+    "ivfluid.bag.fill":         "🩸",
+    "bandage.fill":             "🩹",
+    "medical.thermometer.fill": "🌡️",
+    "heart.fill":               "❤️",
+    "lungs.fill":               "🫁",
+    "brain.head.profile":       "🧠",
+    "eye.fill":                 "👁️",
+    "ear.fill":                 "👂",
+    "hand.raised.fill":         "✋",
+    "figure.walk":              "🚶",
+    "sun.max.fill":             "☀️",
+    "moon.fill":                "🌙",
+    "leaf.fill":                "🍃",
+    "flask.fill":               "🧪",
+    "testtube.2":               "🧫",
+}
+
+// GetIconEmoji returns the emoji for an SF Symbol name
+func GetIconEmoji(icon string) string {
+    if emoji, ok := iconToEmoji[icon]; ok {
+        return emoji
+    }
+    return "💊" // default
+}
+
+templ MedIconPicker(selectedIcon string, inputName string) {
+    <div class="space-y-2">
+        <label class="block text-sm font-semibold text-primary-700 mb-2">الأيقونة</label>
+        <div class="grid grid-cols-5 gap-2" x-data={ "{ selectedIcon: '" + selectedIcon + "' }" }>
+            for _, icon := range MedIconOptions {
+                <label 
+                    class="cursor-pointer"
+                    :class={ "selectedIcon === '" + icon + "' ? 'ring-2 ring-primary-500 ring-offset-2' : ''" }
+                >
+                    <input 
+                        type="radio" 
+                        name={ inputName }
+                        value={ icon }
+                        class="sr-only"
+                        x-model="selectedIcon"
+                        if icon == selectedIcon {
+                            checked
+                        }
+                    />
+                    <div 
+                        class="w-10 h-10 flex items-center justify-center rounded-lg text-xl bg-cream-100 border-2 hover:border-primary-400 transition-colors"
+                        :class={ "selectedIcon === '" + icon + "' ? 'border-primary-500 bg-primary-50' : 'border-gray-200'" }
+                    >
+                        { GetIconEmoji(icon) }
+                    </div>
+                </label>
+            }
+        </div>
+    </div>
+}

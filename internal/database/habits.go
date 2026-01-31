@@ -11,7 +11,7 @@ import (
 // GetHabitsByUserID retrieves all habits for a user
 func (db *DB) GetHabitsByUserID(ctx context.Context, userID uuid.UUID) ([]Habit, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, name, scheduled_days, created_at, updated_at
+		SELECT id, user_id, name, icon, scheduled_days, created_at, updated_at, COALESCE(is_deleted, false) as is_deleted
 		FROM habits WHERE user_id = $1
 		ORDER BY created_at
 	`, userID)
@@ -24,7 +24,7 @@ func (db *DB) GetHabitsByUserID(ctx context.Context, userID uuid.UUID) ([]Habit,
 	for rows.Next() {
 		var h Habit
 		var daysJSON []byte
-		if err := rows.Scan(&h.ID, &h.UserID, &h.Name, &daysJSON, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.UserID, &h.Name, &h.Icon, &daysJSON, &h.CreatedAt, &h.UpdatedAt, &h.IsDeleted); err != nil {
 			return nil, err
 		}
 		json.Unmarshal(daysJSON, &h.ScheduledDays)
@@ -39,11 +39,11 @@ func (db *DB) GetHabitsForDay(ctx context.Context, userID uuid.UUID, date time.T
 	weekday := date.Weekday()
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT h.id, h.user_id, h.name, h.scheduled_days, h.created_at, h.updated_at,
+		SELECT h.id, h.user_id, h.name, h.icon, h.scheduled_days, h.created_at, h.updated_at,
 			   COALESCE(hc.completed, false) as completed
 		FROM habits h
 		LEFT JOIN habits_completions hc ON h.id = hc.habit_id AND hc.date = $2
-		WHERE h.user_id = $1
+		WHERE h.user_id = $1 AND COALESCE(h.is_deleted, false) = false
 		ORDER BY h.created_at
 	`, userID, date.Format("2006-01-02"))
 	if err != nil {
@@ -55,7 +55,7 @@ func (db *DB) GetHabitsForDay(ctx context.Context, userID uuid.UUID, date time.T
 	for rows.Next() {
 		var h HabitWithCompletion
 		var daysJSON []byte
-		if err := rows.Scan(&h.ID, &h.UserID, &h.Name, &daysJSON, &h.CreatedAt, &h.UpdatedAt, &h.Completed); err != nil {
+		if err := rows.Scan(&h.ID, &h.UserID, &h.Name, &h.Icon, &daysJSON, &h.CreatedAt, &h.UpdatedAt, &h.Completed); err != nil {
 			return nil, err
 		}
 		json.Unmarshal(daysJSON, &h.ScheduledDays)
@@ -70,16 +70,19 @@ func (db *DB) GetHabitsForDay(ctx context.Context, userID uuid.UUID, date time.T
 }
 
 // CreateHabit creates a new habit
-func (db *DB) CreateHabit(ctx context.Context, userID uuid.UUID, name string, scheduledDays []string) (*Habit, error) {
+func (db *DB) CreateHabit(ctx context.Context, userID uuid.UUID, name string, icon string, scheduledDays []string) (*Habit, error) {
 	daysJSON, _ := json.Marshal(scheduledDays)
+	if icon == "" {
+		icon = "checkmark.circle.fill"
+	}
 
 	var h Habit
 	var daysBytes []byte
 	err := db.Pool.QueryRow(ctx, `
-		INSERT INTO habits (user_id, name, scheduled_days)
-		VALUES ($1, $2, $3)
-		RETURNING id, user_id, name, scheduled_days, created_at, updated_at
-	`, userID, name, daysJSON).Scan(&h.ID, &h.UserID, &h.Name, &daysBytes, &h.CreatedAt, &h.UpdatedAt)
+		INSERT INTO habits (user_id, name, icon, scheduled_days)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, name, icon, scheduled_days, created_at, updated_at
+	`, userID, name, icon, daysJSON).Scan(&h.ID, &h.UserID, &h.Name, &h.Icon, &daysBytes, &h.CreatedAt, &h.UpdatedAt)
 
 	if err != nil {
 		return nil, err
@@ -90,13 +93,16 @@ func (db *DB) CreateHabit(ctx context.Context, userID uuid.UUID, name string, sc
 }
 
 // UpdateHabit updates a habit
-func (db *DB) UpdateHabit(ctx context.Context, habitID uuid.UUID, name string, scheduledDays []string) error {
+func (db *DB) UpdateHabit(ctx context.Context, habitID uuid.UUID, name string, icon string, scheduledDays []string) error {
 	daysJSON, _ := json.Marshal(scheduledDays)
+	if icon == "" {
+		icon = "checkmark.circle.fill"
+	}
 
 	_, err := db.Pool.Exec(ctx, `
-		UPDATE habits SET name = $2, scheduled_days = $3
+		UPDATE habits SET name = $2, icon = $3, scheduled_days = $4, updated_at = NOW()
 		WHERE id = $1
-	`, habitID, name, daysJSON)
+	`, habitID, name, icon, daysJSON)
 
 	return err
 }
@@ -148,5 +154,14 @@ func (db *DB) UpsertHabitCompletion(ctx context.Context, userID, habitID uuid.UU
 		DO UPDATE SET completed = $3
 	`, habitID, userID, completed, dateStr)
 
+	return err
+}
+
+// SoftDeleteHabit marks a habit as deleted (for sync)
+func (db *DB) SoftDeleteHabit(ctx context.Context, habitID uuid.UUID) error {
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE habits SET is_deleted = true, updated_at = NOW()
+		WHERE id = $1
+	`, habitID)
 	return err
 }

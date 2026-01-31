@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"context"
 	"encoding/json"
 	"time"
@@ -297,7 +298,7 @@ func (db *DB) getAllHabitCompletions(ctx context.Context, userID uuid.UUID) ([]H
 
 func (db *DB) getAllMedicationLogs(ctx context.Context, userID uuid.UUID) ([]MedicationLog, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, medication_id, user_id, taken, date, created_at
+		SELECT id, medication_id, user_id, taken, dose_number, date, created_at
 		FROM medication_logs WHERE user_id = $1
 		ORDER BY date DESC
 	`, userID)
@@ -309,7 +310,7 @@ func (db *DB) getAllMedicationLogs(ctx context.Context, userID uuid.UUID) ([]Med
 	var logs []MedicationLog
 	for rows.Next() {
 		var l MedicationLog
-		if err := rows.Scan(&l.ID, &l.MedicationID, &l.UserID, &l.Taken, &l.Date, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.MedicationID, &l.UserID, &l.Taken, &l.DoseNumber, &l.Date, &l.CreatedAt); err != nil {
 			return nil, err
 		}
 		logs = append(logs, l)
@@ -422,7 +423,7 @@ func (db *DB) getAllWorkoutLogs(ctx context.Context, userID uuid.UUID) ([]Workou
 
 func (db *DB) getHabitsUpdatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]Habit, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, name, scheduled_days, created_at, updated_at
+		SELECT id, user_id, name, icon, scheduled_days, created_at, updated_at, COALESCE(is_deleted, false) as is_deleted
 		FROM habits WHERE user_id = $1 AND updated_at > $2
 		ORDER BY created_at
 	`, userID, since)
@@ -435,7 +436,7 @@ func (db *DB) getHabitsUpdatedSince(ctx context.Context, userID uuid.UUID, since
 	for rows.Next() {
 		var h Habit
 		var daysJSON []byte
-		if err := rows.Scan(&h.ID, &h.UserID, &h.Name, &daysJSON, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.UserID, &h.Name, &h.Icon, &daysJSON, &h.CreatedAt, &h.UpdatedAt, &h.IsDeleted); err != nil {
 			return nil, err
 		}
 		json.Unmarshal(daysJSON, &h.ScheduledDays)
@@ -471,7 +472,8 @@ func (db *DB) getHabitCompletionsUpdatedSince(ctx context.Context, userID uuid.U
 func (db *DB) getMedicationsUpdatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]Medication, error) {
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, user_id, name, dosage, scheduled_days, times_per_day,
-			   duration_type, start_date, end_date, COALESCE(notes, '') as notes, is_active,
+			   duration_type, start_date, end_date, COALESCE(notes, '') as notes,
+			   COALESCE(icon, 'pill.fill') as icon, is_active, COALESCE(is_deleted, false) as is_deleted,
 			   created_at, updated_at
 		FROM medications WHERE user_id = $1 AND updated_at > $2
 		ORDER BY created_at
@@ -487,7 +489,8 @@ func (db *DB) getMedicationsUpdatedSince(ctx context.Context, userID uuid.UUID, 
 		var daysJSON []byte
 		if err := rows.Scan(
 			&m.ID, &m.UserID, &m.Name, &m.Dosage, &daysJSON, &m.TimesPerDay,
-			&m.DurationType, &m.StartDate, &m.EndDate, &m.Notes, &m.IsActive,
+			&m.DurationType, &m.StartDate, &m.EndDate, &m.Notes,
+			&m.Icon, &m.IsActive, &m.IsDeleted,
 			&m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -501,7 +504,7 @@ func (db *DB) getMedicationsUpdatedSince(ctx context.Context, userID uuid.UUID, 
 
 func (db *DB) getMedicationLogsUpdatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]MedicationLog, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, medication_id, user_id, taken, date, created_at
+		SELECT id, medication_id, user_id, taken, dose_number, date, created_at
 		FROM medication_logs WHERE user_id = $1 AND updated_at > $2
 		ORDER BY date DESC
 	`, userID, since)
@@ -513,7 +516,7 @@ func (db *DB) getMedicationLogsUpdatedSince(ctx context.Context, userID uuid.UUI
 	var logs []MedicationLog
 	for rows.Next() {
 		var l MedicationLog
-		if err := rows.Scan(&l.ID, &l.MedicationID, &l.UserID, &l.Taken, &l.Date, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.MedicationID, &l.UserID, &l.Taken, &l.DoseNumber, &l.Date, &l.CreatedAt); err != nil {
 			return nil, err
 		}
 		logs = append(logs, l)
@@ -709,18 +712,19 @@ func (db *DB) getMarkdownNotesUpdatedSince(ctx context.Context, userID uuid.UUID
 func (db *DB) SyncPushHabit(ctx context.Context, userID uuid.UUID, serverID *string, isDeleted bool, data json.RawMessage) (string, error) {
 	if isDeleted {
 		if serverID == nil {
-			// Todo was deleted before ever syncing - nothing to do on server
+			// Habit was deleted before ever syncing - nothing to do on server
 			return "", nil
 		}
 		id, err := uuid.Parse(*serverID)
 		if err != nil {
 			return "", err
 		}
-		return *serverID, db.DeleteHabit(ctx, id)
+		return *serverID, db.SoftDeleteHabit(ctx, id)
 	}
 
 	var habitData struct {
 		Name          string   `json:"name"`
+		Icon          string   `json:"icon"`
 		ScheduledDays []string `json:"scheduled_days"`
 	}
 	if err := json.Unmarshal(data, &habitData); err != nil {
@@ -733,11 +737,11 @@ func (db *DB) SyncPushHabit(ctx context.Context, userID uuid.UUID, serverID *str
 		if err != nil {
 			return "", err
 		}
-		return *serverID, db.UpdateHabit(ctx, id, habitData.Name, habitData.ScheduledDays)
+		return *serverID, db.UpdateHabit(ctx, id, habitData.Name, habitData.Icon, habitData.ScheduledDays)
 	}
 
 	// Create new
-	habit, err := db.CreateHabit(ctx, userID, habitData.Name, habitData.ScheduledDays)
+	habit, err := db.CreateHabit(ctx, userID, habitData.Name, habitData.Icon, habitData.ScheduledDays)
 	if err != nil {
 		return "", err
 	}
@@ -768,6 +772,7 @@ func (db *DB) SyncPushMedication(ctx context.Context, userID uuid.UUID, serverID
 		EndDate       *time.Time `json:"end_date"`
 		Notes         string     `json:"notes"`
 		IsActive      bool       `json:"is_active"`
+		Icon          string     `json:"icon"`
 	}
 	if err := json.Unmarshal(data, &medData); err != nil {
 		return "", err
@@ -779,11 +784,11 @@ func (db *DB) SyncPushMedication(ctx context.Context, userID uuid.UUID, serverID
 		if err != nil {
 			return "", err
 		}
-		return *serverID, db.UpdateMedication(ctx, id, medData.Name, medData.Dosage, medData.ScheduledDays, medData.TimesPerDay, medData.DurationType, medData.StartDate, medData.EndDate, medData.Notes, medData.IsActive)
+		return *serverID, db.UpdateMedication(ctx, id, medData.Name, medData.Dosage, medData.ScheduledDays, medData.TimesPerDay, medData.DurationType, medData.StartDate, medData.EndDate, medData.Notes, medData.Icon, medData.IsActive)
 	}
 
 	// Create new
-	med, err := db.CreateMedication(ctx, userID, medData.Name, medData.Dosage, medData.ScheduledDays, medData.TimesPerDay, medData.DurationType, medData.StartDate, medData.EndDate, medData.Notes)
+	med, err := db.CreateMedication(ctx, userID, medData.Name, medData.Dosage, medData.ScheduledDays, medData.TimesPerDay, medData.DurationType, medData.StartDate, medData.EndDate, medData.Notes, medData.Icon)
 	if err != nil {
 		return "", err
 	}
@@ -1056,6 +1061,7 @@ func (db *DB) SyncPushMedicationLog(ctx context.Context, userID uuid.UUID, serve
 		MedicationID string    `json:"medication_id"`
 		Taken        bool      `json:"taken"`
 		Date         time.Time `json:"date"`
+		DoseNumber   int       `json:"dose_number"`
 	}
 	if err := json.Unmarshal(data, &logData); err != nil {
 		return "", err
@@ -1066,14 +1072,20 @@ func (db *DB) SyncPushMedicationLog(ctx context.Context, userID uuid.UUID, serve
 		return "", err
 	}
 
+	// Default dose_number to 1 if not provided
+	doseNumber := logData.DoseNumber
+	if doseNumber == 0 {
+		doseNumber = 1
+	}
+
 	// Use upsert to set the exact completion status
-	err = db.UpsertMedicationLog(ctx, userID, medID, logData.Date, logData.Taken)
+	err = db.UpsertMedicationLog(ctx, userID, medID, logData.Date, logData.Taken, doseNumber)
 	if err != nil {
 		return "", err
 	}
 
-	// Return a composite ID
-	return medID.String() + "_" + logData.Date.Format("2006-01-02"), nil
+	// Return a composite ID including dose number
+	return fmt.Sprintf("%s_%s_%d", medID.String(), logData.Date.Format("2006-01-02"), doseNumber), nil
 }
 
 // getAllDailyImages fetches all daily images for a user (including soft-deleted for sync)
