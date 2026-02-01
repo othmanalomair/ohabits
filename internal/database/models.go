@@ -172,6 +172,7 @@ type Workout struct {
 	DisplayOrder int        `json:"display_order"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+	IsRestDay    bool       `json:"is_rest_day"`
 }
 
 // Exercise represents a single exercise in a workout
@@ -191,6 +192,7 @@ type WorkoutLog struct {
 	Date               time.Time  `json:"date"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
+	IsRestDay          bool       `json:"is_rest_day"`
 }
 
 // Cardio represents cardio activity
@@ -337,4 +339,21 @@ type MonthlySummary struct {
 	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
 	IsDeleted     bool       `json:"is_deleted"`
 	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// UserSettings represents user-specific settings like section visibility and ordering
+type UserSettings struct {
+	ID             uuid.UUID       `json:"id"`
+	UserID         uuid.UUID       `json:"user_id"`
+	SectionConfigs []SectionConfig `json:"section_configs"`
+	IsDeleted      bool            `json:"is_deleted"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+// SectionConfig represents visibility and order settings for a homepage section
+type SectionConfig struct {
+	ID        string `json:"id"`
+	IsVisible bool   `json:"is_visible"`
+	Order     int    `json:"order"`
 }

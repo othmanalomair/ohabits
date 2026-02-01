@@ -142,6 +142,8 @@ func (h *Handler) SyncPush(c echo.Context) error {
 			serverID, err = h.DB.SyncPushWorkoutLog(ctx, userID, item.ServerID, item.IsDeleted, item.Data)
 		case "markdownNote":
 			serverID, err = h.DB.SyncPushMarkdownNote(ctx, userID, item.ServerID, item.IsDeleted, item.Data)
+		case "userSettings":
+			serverID, err = h.DB.SyncPushUserSettings(ctx, userID, item.ServerID, item.IsDeleted, item.Data)
 		default:
 			result.Error = "Unknown item type: " + item.Type
 			results = append(results, result)

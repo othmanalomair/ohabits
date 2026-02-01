@@ -23,6 +23,7 @@ type SyncAllData struct {
 	WorkoutLogs       []WorkoutLog       `json:"workoutLogs"`
 	MarkdownNotes     []MarkdownNote     `json:"markdownNotes"`
 	DailyImages       []DailyImage       `json:"dailyImages"`
+	UserSettings      *UserSettings      `json:"userSettings,omitempty"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
 
@@ -40,6 +41,7 @@ type SyncChangesData struct {
 	WorkoutLogs       []WorkoutLog       `json:"workoutLogs,omitempty"`
 	MarkdownNotes     []MarkdownNote     `json:"markdownNotes,omitempty"`
 	DailyImages       []DailyImage       `json:"dailyImages,omitempty"`
+	UserSettings      *UserSettings      `json:"userSettings,omitempty"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
 
@@ -150,6 +152,13 @@ func (db *DB) GetAllSyncData(ctx context.Context, userID uuid.UUID) (*SyncAllDat
 		return nil, err
 	}
 	data.DailyImages = dailyImages
+
+	// Get user settings
+	userSettings, err := db.GetUserSettings(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data.UserSettings = userSettings
 
 	return data, nil
 }
@@ -266,6 +275,15 @@ func (db *DB) GetSyncChangesSince(ctx context.Context, userID uuid.UUID, since t
 	}
 	if len(dailyImages) > 0 {
 		data.DailyImages = dailyImages
+	}
+
+	// Get user settings if updated since timestamp
+	userSettings, err := db.getUserSettingsUpdatedSince(ctx, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	if userSettings != nil {
+		data.UserSettings = userSettings
 	}
 
 	return data, nil
@@ -390,7 +408,7 @@ func (db *DB) getAllTodos(ctx context.Context, userID uuid.UUID) ([]Todo, error)
 
 func (db *DB) getAllWorkoutLogs(ctx context.Context, userID uuid.UUID) ([]WorkoutLog, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at
+		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day
 		FROM workout_logs WHERE user_id = $1
 		ORDER BY date DESC
 	`, userID)
@@ -405,7 +423,7 @@ func (db *DB) getAllWorkoutLogs(ctx context.Context, userID uuid.UUID) ([]Workou
 		var exercisesJSON, cardioJSON []byte
 		if err := rows.Scan(
 			&wl.ID, &wl.UserID, &wl.WorkoutName, &exercisesJSON, &cardioJSON,
-			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt,
+			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay,
 		); err != nil {
 			return nil, err
 		}
@@ -624,7 +642,7 @@ func (db *DB) getEventsUpdatedSince(ctx context.Context, userID uuid.UUID, since
 
 func (db *DB) getWorkoutsUpdatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]Workout, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, name, day, exercises, display_order, created_at, updated_at
+		SELECT id, user_id, name, day, exercises, display_order, created_at, updated_at, is_rest_day
 		FROM workouts
 		WHERE user_id = $1 AND updated_at > $2
 		ORDER BY display_order
@@ -640,7 +658,7 @@ func (db *DB) getWorkoutsUpdatedSince(ctx context.Context, userID uuid.UUID, sin
 		var exercisesJSON []byte
 		if err := rows.Scan(
 			&w.ID, &w.UserID, &w.Name, &w.Day, &exercisesJSON,
-			&w.DisplayOrder, &w.CreatedAt, &w.UpdatedAt,
+			&w.DisplayOrder, &w.CreatedAt, &w.UpdatedAt, &w.IsRestDay,
 		); err != nil {
 			return nil, err
 		}
@@ -653,7 +671,7 @@ func (db *DB) getWorkoutsUpdatedSince(ctx context.Context, userID uuid.UUID, sin
 
 func (db *DB) getWorkoutLogsUpdatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]WorkoutLog, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at
+		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day
 		FROM workout_logs WHERE user_id = $1 AND updated_at > $2
 		ORDER BY date DESC
 	`, userID, since)
@@ -668,7 +686,7 @@ func (db *DB) getWorkoutLogsUpdatedSince(ctx context.Context, userID uuid.UUID, 
 		var exercisesJSON, cardioJSON []byte
 		if err := rows.Scan(
 			&wl.ID, &wl.UserID, &wl.WorkoutName, &exercisesJSON, &cardioJSON,
-			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt,
+			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay,
 		); err != nil {
 			return nil, err
 		}
@@ -933,6 +951,7 @@ func (db *DB) SyncPushWorkout(ctx context.Context, userID uuid.UUID, serverID *s
 	}
 
 	var workoutData struct {
+		IsRestDay bool       `json:"is_rest_day"`
 		Name      string     `json:"name"`
 		Day       string     `json:"day"`
 		Exercises []Exercise `json:"exercises"`
@@ -947,11 +966,11 @@ func (db *DB) SyncPushWorkout(ctx context.Context, userID uuid.UUID, serverID *s
 		if err != nil {
 			return "", err
 		}
-		return *serverID, db.UpdateWorkout(ctx, id, workoutData.Name, workoutData.Day, workoutData.Exercises)
+		return *serverID, db.UpdateWorkoutWithRestDay(ctx, id, workoutData.Name, workoutData.Day, workoutData.Exercises, workoutData.IsRestDay)
 	}
 
 	// Create new
-	workout, err := db.CreateWorkout(ctx, userID, workoutData.Name, workoutData.Day, workoutData.Exercises)
+	workout, err := db.CreateWorkoutWithRestDay(ctx, userID, workoutData.Name, workoutData.Day, workoutData.Exercises, workoutData.IsRestDay)
 	if err != nil {
 		return "", err
 	}
@@ -966,13 +985,14 @@ func (db *DB) SyncPushWorkoutLog(ctx context.Context, userID uuid.UUID, serverID
 		Cardio      []Cardio   `json:"cardio"`
 		Weight      float64    `json:"weight"`
 		Date        time.Time  `json:"date"`
+		IsRestDay   bool       `json:"is_rest_day"`
 	}
 	if err := json.Unmarshal(data, &logData); err != nil {
 		return "", err
 	}
 
 	// Workout logs use upsert based on date
-	log, err := db.SaveWorkoutLog(ctx, userID, logData.WorkoutName, logData.Exercises, logData.Cardio, logData.Weight, logData.Date)
+	log, err := db.SaveWorkoutLogWithRestDay(ctx, userID, logData.WorkoutName, logData.Exercises, logData.Cardio, logData.Weight, logData.Date, logData.IsRestDay)
 	if err != nil {
 		return "", err
 	}
