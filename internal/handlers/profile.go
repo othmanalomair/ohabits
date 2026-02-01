@@ -237,3 +237,281 @@ func (h *Handler) UpdateProfileAvatar(c echo.Context) error {
 	c.Response().Header().Set("HX-Trigger", `{"showToast":{"code":"avatar_saved","type":"success"}}`)
 	return Render(c, http.StatusOK, pages.AvatarSection(user))
 }
+
+// MARK: - Profile API (للتطبيق الأصلي iOS/macOS)
+
+// ProfileAPIResponse represents the JSON response for profile API
+type ProfileAPIResponse struct {
+	Status string       `json:"status"`
+	User   *ProfileUser `json:"user,omitempty"`
+	Error  string       `json:"error,omitempty"`
+}
+
+// ProfileUser represents user data in API response
+type ProfileUser struct {
+	ID              string  `json:"id"`
+	Email           string  `json:"email"`
+	FullName        string  `json:"full_name"`
+	ProfileImageUrl *string `json:"profile_image_url"`
+}
+
+// ProfileImageAPIResponse represents the response for profile image upload
+type ProfileImageAPIResponse struct {
+	Status   string  `json:"status"`
+	ImageUrl *string `json:"image_url,omitempty"`
+	Error    string  `json:"error,omitempty"`
+}
+
+// GetProfileAPI returns user profile as JSON
+// GET /api/user/profile
+func (h *Handler) GetProfileAPI(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, ProfileAPIResponse{
+			Status: "error",
+			Error:  "Unauthorized",
+		})
+	}
+
+	user, err := h.DB.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ProfileAPIResponse{
+			Status: "error",
+			Error:  "User not found",
+		})
+	}
+
+	return c.JSON(http.StatusOK, ProfileAPIResponse{
+		Status: "success",
+		User: &ProfileUser{
+			ID:              user.ID.String(),
+			Email:           user.Email,
+			FullName:        user.DisplayName,
+			ProfileImageUrl: user.AvatarURL,
+		},
+	})
+}
+
+// UpdateProfileRequest represents the request body for profile update
+type UpdateProfileRequest struct {
+	FullName string `json:"full_name"`
+}
+
+// UpdateProfileAPI updates user profile (name only)
+// PUT /api/user/profile
+func (h *Handler) UpdateProfileAPI(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, ProfileAPIResponse{
+			Status: "error",
+			Error:  "Unauthorized",
+		})
+	}
+
+	var req UpdateProfileRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ProfileAPIResponse{
+			Status: "error",
+			Error:  "Invalid request format",
+		})
+	}
+
+	displayName := strings.TrimSpace(req.FullName)
+	if displayName == "" {
+		return c.JSON(http.StatusBadRequest, ProfileAPIResponse{
+			Status: "error",
+			Error:  "Name is required",
+		})
+	}
+
+	// Get current user to preserve email
+	user, err := h.DB.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ProfileAPIResponse{
+			Status: "error",
+			Error:  "User not found",
+		})
+	}
+
+	// Update only the display name
+	if err := h.DB.UpdateUserInfo(c.Request().Context(), userID, displayName, user.Email); err != nil {
+		log.Printf("Error updating user profile: %v", err)
+		return c.JSON(http.StatusInternalServerError, ProfileAPIResponse{
+			Status: "error",
+			Error:  "Failed to update profile",
+		})
+	}
+
+	// Refresh user data
+	user, _ = h.DB.GetUserByID(c.Request().Context(), userID)
+
+	return c.JSON(http.StatusOK, ProfileAPIResponse{
+		Status: "success",
+		User: &ProfileUser{
+			ID:              user.ID.String(),
+			Email:           user.Email,
+			FullName:        user.DisplayName,
+			ProfileImageUrl: user.AvatarURL,
+		},
+	})
+}
+
+// UploadProfileImageAPI handles profile image upload from native app
+// POST /api/user/profile/image
+func (h *Handler) UploadProfileImageAPI(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Unauthorized",
+		})
+	}
+
+	user, err := h.DB.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "User not found",
+		})
+	}
+
+	// Get uploaded file
+	file, err := c.FormFile("image")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "No image provided",
+		})
+	}
+
+	// Check file size
+	if file.Size > avatarMaxSize {
+		return c.JSON(http.StatusBadRequest, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Image too large (max 5MB)",
+		})
+	}
+
+	// Check mime type
+	mimeType := file.Header.Get("Content-Type")
+	if !strings.HasPrefix(mimeType, "image/") {
+		return c.JSON(http.StatusBadRequest, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Invalid image format",
+		})
+	}
+
+	// Create avatars directory
+	avatarsDir := filepath.Join(uploadsDir, "avatars")
+	if err := os.MkdirAll(avatarsDir, 0755); err != nil {
+		log.Printf("Error creating avatars directory: %v", err)
+		return c.JSON(http.StatusInternalServerError, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Server error",
+		})
+	}
+
+	// Open source file
+	src, err := file.Open()
+	if err != nil {
+		log.Printf("Error opening uploaded file: %v", err)
+		return c.JSON(http.StatusInternalServerError, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Failed to process image",
+		})
+	}
+	defer src.Close()
+
+	// Decode image
+	img, err := imaging.Decode(src)
+	if err != nil {
+		log.Printf("Error decoding image: %v", err)
+		return c.JSON(http.StatusBadRequest, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Invalid image format",
+		})
+	}
+
+	// Resize to square avatar
+	avatar := imaging.Fill(img, avatarSize, avatarSize, imaging.Center, imaging.Lanczos)
+
+	// Generate unique filename
+	newFilename := fmt.Sprintf("%s_%s.jpg", userID.String(), uuid.New().String()[:8])
+	avatarPath := filepath.Join(avatarsDir, newFilename)
+
+	// Save processed avatar as JPEG
+	if err := imaging.Save(avatar, avatarPath, imaging.JPEGQuality(85)); err != nil {
+		log.Printf("Error saving avatar: %v", err)
+		return c.JSON(http.StatusInternalServerError, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Failed to save image",
+		})
+	}
+
+	// Delete old avatar if exists
+	if user.GetAvatarURL() != "" {
+		oldPath := strings.TrimPrefix(user.GetAvatarURL(), "/")
+		cleanPath := filepath.Clean(oldPath)
+		if strings.HasPrefix(cleanPath, "uploads/") && !strings.Contains(cleanPath, "..") {
+			os.Remove(cleanPath)
+		}
+	}
+
+	// Update database
+	avatarURL := "/" + avatarPath
+	if err := h.DB.UpdateUserAvatar(c.Request().Context(), userID, avatarURL); err != nil {
+		os.Remove(avatarPath)
+		log.Printf("Error updating avatar in DB: %v", err)
+		return c.JSON(http.StatusInternalServerError, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Failed to save image",
+		})
+	}
+
+	return c.JSON(http.StatusOK, ProfileImageAPIResponse{
+		Status:   "success",
+		ImageUrl: &avatarURL,
+	})
+}
+
+// DeleteProfileImageAPI deletes the user's profile image
+// DELETE /api/user/profile/image
+func (h *Handler) DeleteProfileImageAPI(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Unauthorized",
+		})
+	}
+
+	user, err := h.DB.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "User not found",
+		})
+	}
+
+	// Delete old avatar if exists
+	if user.GetAvatarURL() != "" {
+		oldPath := strings.TrimPrefix(user.GetAvatarURL(), "/")
+		cleanPath := filepath.Clean(oldPath)
+		if strings.HasPrefix(cleanPath, "uploads/") && !strings.Contains(cleanPath, "..") {
+			os.Remove(cleanPath)
+		}
+	}
+
+	// Update database to clear avatar
+	if err := h.DB.UpdateUserAvatar(c.Request().Context(), userID, ""); err != nil {
+		log.Printf("Error clearing avatar in DB: %v", err)
+		return c.JSON(http.StatusInternalServerError, ProfileImageAPIResponse{
+			Status: "error",
+			Error:  "Failed to delete image",
+		})
+	}
+
+	return c.JSON(http.StatusOK, ProfileImageAPIResponse{
+		Status: "success",
+	})
+}

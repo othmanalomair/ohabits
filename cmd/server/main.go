@@ -169,6 +169,12 @@ func main() {
 	protected.POST("/api/sync/changes", h.SyncChanges)
 	protected.GET("/api/sync/status", h.SyncStatus)
 
+	// Profile API (للتطبيق الأصلي)
+	protected.GET("/api/user/profile", h.GetProfileAPI)
+	protected.PUT("/api/user/profile", h.UpdateProfileAPI)
+	protected.POST("/api/user/profile/image", h.UploadProfileImageAPI)
+	protected.DELETE("/api/user/profile/image", h.DeleteProfileImageAPI)
+
 	// User API (للتطبيق الأصلي)
 	protected.GET("/api/user/info", h.UserInfo)
 	protected.GET("/api/auth/validate", h.ValidateToken)
