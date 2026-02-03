@@ -14,6 +14,7 @@ type User struct {
 	AppleID     *string   `json:"apple_id"`   // Apple Sign-In identifier
 	DisplayName string    `json:"display_name"`
 	AvatarURL   *string   `json:"avatar_url"` // nullable
+	Role        int       `json:"role"`       // 1=admin, 2=normal, 3=subscribed
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

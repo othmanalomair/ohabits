@@ -1,0 +1,172 @@
+package pages
+
+import (
+	"fmt"
+	"ohabits/internal/database"
+	"ohabits/templates/layouts"
+)
+
+templ AdminDashboard(user *database.User, stats *database.AdminStats, users []database.UserStats) {
+	@layouts.Base("لوحة الإدارة", user) {
+		<div class="max-w-4xl mx-auto space-y-4">
+			<!-- Header -->
+			<div class="retro-card p-4 md:p-5">
+				<div class="flex items-center justify-between mb-2">
+					<h1 class="text-xl md:text-2xl font-bold text-retro-dark">لوحة الإدارة</h1>
+					<a href="/" class="anime-btn px-3 py-1.5 text-sm">
+						← الرجوع
+					</a>
+				</div>
+				<p class="text-sm text-gray-600">إحصائيات النظام وإدارة المستخدمين</p>
+			</div>
+
+			<!-- Stats Cards -->
+			<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+				@statCard("إجمالي المستخدمين", fmt.Sprintf("%d", stats.TotalUsers), "👥", "primary")
+				@statCard("النشطين هذا الأسبوع", fmt.Sprintf("%d", stats.ActiveThisWeek), "📊", "green")
+				@statCard("المشتركين", fmt.Sprintf("%d", stats.SubscribedCount), "⭐", "yellow")
+				@statCard("المسؤولين", fmt.Sprintf("%d", stats.AdminCount), "👑", "red")
+			</div>
+
+			<!-- Users Table -->
+			<div class="retro-card p-4 md:p-5">
+				<h2 class="section-title text-lg mb-4">المستخدمون</h2>
+
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b-2 border-primary-200">
+								<th class="text-right py-2 px-2 font-semibold text-primary-700">المستخدم</th>
+								<th class="text-center py-2 px-2 font-semibold text-primary-700">الدور</th>
+								<th class="text-center py-2 px-2 font-semibold text-primary-700 hidden md:table-cell">العادات</th>
+								<th class="text-center py-2 px-2 font-semibold text-primary-700 hidden md:table-cell">الملاحظات</th>
+								<th class="text-center py-2 px-2 font-semibold text-primary-700 hidden md:table-cell">المدونة</th>
+								<th class="text-right py-2 px-2 font-semibold text-primary-700 hidden md:table-cell">آخر نشاط</th>
+								<th class="text-center py-2 px-2 font-semibold text-primary-700">إجراءات</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, u := range users {
+								<tr class="border-b border-cream-200 hover:bg-cream-100">
+									<td class="py-3 px-2">
+										<div class="flex items-center gap-2">
+											<div class="w-8 h-8 rounded-full border-2 border-primary-300 overflow-hidden bg-cream-100 flex-shrink-0">
+												if u.AvatarURL != nil && *u.AvatarURL != "" {
+													<img src={ *u.AvatarURL } alt="" class="w-full h-full object-cover"/>
+												} else {
+													<div class="w-full h-full flex items-center justify-center text-primary-600 text-xs font-bold">
+														if len(u.DisplayName) > 0 {
+															{ string([]rune(u.DisplayName)[0]) }
+														} else if len(u.Email) > 0 {
+															{ string([]rune(u.Email)[0]) }
+														} else {
+															?
+														}
+													</div>
+												}
+											</div>
+											<div class="min-w-0">
+												<p class="font-semibold text-retro-dark truncate">
+													if u.DisplayName != "" {
+														{ u.DisplayName }
+													} else {
+														{ u.Email }
+													}
+												</p>
+												<p class="text-xs text-gray-500 truncate">{ u.Email }</p>
+											</div>
+										</div>
+									</td>
+									<td class="py-3 px-2 text-center">
+										@roleBadge(u.Role)
+									</td>
+									<td class="py-3 px-2 text-center hidden md:table-cell">
+										<span class="retro-badge">{ fmt.Sprintf("%d", u.HabitsCount) }</span>
+									</td>
+									<td class="py-3 px-2 text-center hidden md:table-cell">
+										<span class="retro-badge">{ fmt.Sprintf("%d", u.NotesCount) }</span>
+									</td>
+									<td class="py-3 px-2 text-center hidden md:table-cell">
+										<span class="retro-badge">{ fmt.Sprintf("%d", u.BlogCount) }</span>
+									</td>
+									<td class="py-3 px-2 text-right text-xs text-gray-600 hidden md:table-cell">
+										if u.LastActivity != nil {
+											{ u.LastActivity.Format("01/02 15:04") }
+										} else {
+											-
+										}
+									</td>
+									<td class="py-3 px-2 text-center">
+										if u.Role != 1 {
+											<button
+												hx-delete={ fmt.Sprintf("/admin/users/%s", u.ID.String()) }
+												hx-confirm={ fmt.Sprintf("هل أنت متأكد من حذف المستخدم %s؟\nسيتم حذف جميع بياناته نهائياً!", getUserDisplayName(u)) }
+												class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+												title="حذف المستخدم"
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+												</svg>
+											</button>
+										} else {
+											<span class="text-gray-400 text-xs">-</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+
+				if len(users) == 0 {
+					<p class="text-center text-gray-500 py-8">لا يوجد مستخدمون</p>
+				}
+			</div>
+		</div>
+	}
+}
+
+templ statCard(title string, value string, icon string, color string) {
+	<div class="retro-card p-3 md:p-4 text-center">
+		<div class="text-2xl md:text-3xl mb-1">{ icon }</div>
+		<div class={ "text-xl md:text-2xl font-bold", textColor(color) }>{ value }</div>
+		<div class="text-xs text-gray-600">{ title }</div>
+	</div>
+}
+
+func textColor(color string) string {
+	switch color {
+	case "green":
+		return "text-green-600"
+	case "yellow":
+		return "text-yellow-600"
+	case "red":
+		return "text-red-600"
+	default:
+		return "text-primary-600"
+	}
+}
+
+func getUserDisplayName(u database.UserStats) string {
+	if u.DisplayName != "" {
+		return u.DisplayName
+	}
+	return u.Email
+}
+
+templ roleBadge(role int) {
+	switch role {
+		case 1:
+			<span class="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-300">
+				👑 مسؤول
+			</span>
+		case 3:
+			<span class="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700 border border-yellow-300">
+				⭐ مشترك
+			</span>
+		default:
+			<span class="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-300">
+				عادي
+			</span>
+	}
+}

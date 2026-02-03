@@ -28,9 +28,9 @@ func (db *DB) CreateUser(ctx context.Context, email, password, displayName strin
 	err = db.Pool.QueryRow(ctx, `
 		INSERT INTO users (email, password, display_name)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, display_name, avatar_url, created_at, updated_at
+		RETURNING id, email, display_name, avatar_url, role, created_at, updated_at
 	`, email, string(hashedPassword), displayName).Scan(
-		&user.ID, &user.Email, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.DisplayName, &user.AvatarURL, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -47,10 +47,10 @@ func (db *DB) CreateUser(ctx context.Context, email, password, displayName strin
 func (db *DB) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
+		SELECT id, email, password, apple_id, display_name, avatar_url, role, created_at, updated_at
 		FROM users WHERE email = $1
 	`, email).Scan(
-		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -67,10 +67,10 @@ func (db *DB) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 func (db *DB) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
+		SELECT id, email, password, apple_id, display_name, avatar_url, role, created_at, updated_at
 		FROM users WHERE id = $1
 	`, id).Scan(
-		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -149,10 +149,10 @@ func (db *DB) CheckEmailExists(ctx context.Context, email string, excludeUserID 
 func (db *DB) GetUserByAppleID(ctx context.Context, appleID string) (*User, error) {
 	var user User
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
+		SELECT id, email, password, apple_id, display_name, avatar_url, role, created_at, updated_at
 		FROM users WHERE apple_id = $1
 	`, appleID).Scan(
-		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {
@@ -171,9 +171,9 @@ func (db *DB) CreateAppleUser(ctx context.Context, appleID, email, displayName s
 	err := db.Pool.QueryRow(ctx, `
 		INSERT INTO users (email, password, apple_id, display_name)
 		VALUES ($1, '', $2, $3)
-		RETURNING id, email, password, apple_id, display_name, avatar_url, created_at, updated_at
+		RETURNING id, email, password, apple_id, display_name, avatar_url, role, created_at, updated_at
 	`, email, appleID, displayName).Scan(
-		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Password, &user.AppleID, &user.DisplayName, &user.AvatarURL, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err != nil {

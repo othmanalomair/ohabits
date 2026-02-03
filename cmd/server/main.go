@@ -182,6 +182,13 @@ func main() {
 	protected.POST("/api/blog/images", h.UploadBlogImageAPI)
 	protected.DELETE("/api/blog/images/:id", h.DeleteBlogImageAPI)
 
+	// Admin routes
+	admin := e.Group("/admin")
+	admin.Use(auth.RequireAuth)
+	admin.Use(middleware.RequireAdmin(db))
+	admin.GET("", h.AdminDashboard)
+	admin.DELETE("/users/:id", h.DeleteUser)
+
 	// Start server
 	go func() {
 		addr := ":" + cfg.Port
