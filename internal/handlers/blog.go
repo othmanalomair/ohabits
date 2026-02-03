@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"ohabits/internal/database"
 	"ohabits/internal/middleware"
@@ -16,6 +15,28 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
+
+// ResolveBlogImageMarkers replaces position markers with actual URLs in content
+func ResolveBlogImageMarkers(content string, images []database.BlogImage) string {
+	// Create a map of marker -> URL
+	markerMap := make(map[string]string)
+	for _, img := range images {
+		if img.OriginalPath != "" {
+			markerMap[img.PositionMarker] = img.OriginalPath
+		}
+	}
+
+	// Replace markers in content
+	result := content
+	for marker, url := range markerMap {
+		// Replace ![](marker) or ![alt](marker) with actual URL
+		result = strings.ReplaceAll(result, "]("+marker+")", "]("+url+")")
+	}
+
+	return result
+}
+
+
 
 // BlogPage renders the blog listing page
 func (h *Handler) BlogPage(c echo.Context) error {
@@ -108,6 +129,10 @@ func (h *Handler) BlogViewPage(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/blog")
 	}
 
+	// Fetch blog images and resolve markers in content
+	images, _ := h.DB.GetBlogImagesForNote(c.Request().Context(), userID, postID)
+	post.Content = ResolveBlogImageMarkers(post.Content, images)
+
 	return Render(c, http.StatusOK, pages.BlogViewPage(user, post))
 }
 
@@ -185,7 +210,7 @@ func (h *Handler) BlogSearch(c echo.Context) error {
 	return Render(c, http.StatusOK, pages.BlogPostsList(posts, query))
 }
 
-// BlogUploadImage handles image upload for blog posts
+// BlogUploadImage handles image upload for blog posts (webapp)
 func (h *Handler) BlogUploadImage(c echo.Context) error {
 	userID, ok := middleware.GetUserID(c)
 	if !ok {
@@ -204,20 +229,34 @@ func (h *Handler) BlogUploadImage(c echo.Context) error {
 	}
 
 	// Validate file type
+	mimeType := file.Header.Get("Content-Type")
 	ext := strings.ToLower(filepath.Ext(file.Filename))
 	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "نوع الملف غير مدعوم"})
 	}
 
-	// Create upload directory
-	uploadDir := fmt.Sprintf("uploads/blog/%s", userID.String())
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+	// Get note_id if provided (may be empty for new posts)
+	noteIDStr := c.FormValue("note_id")
+
+	// Generate position marker
+	positionMarker := fmt.Sprintf("blog-img-%s", uuid.New().String()[:8])
+
+	// Create upload directories
+	userDir := filepath.Join("uploads", "blog", userID.String())
+	originalsDir := filepath.Join(userDir, "originals")
+	thumbsDir := filepath.Join(userDir, "thumbnails")
+
+	if err := os.MkdirAll(originalsDir, 0755); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
+	}
+	if err := os.MkdirAll(thumbsDir, 0755); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 
 	// Generate unique filename
-	filename := fmt.Sprintf("%d_%s%s", time.Now().UnixNano(), uuid.New().String()[:8], ext)
-	filePath := filepath.Join(uploadDir, filename)
+	newFilename := fmt.Sprintf("%s_%s%s", positionMarker, uuid.New().String()[:8], ext)
+	originalPath := filepath.Join(originalsDir, newFilename)
+	thumbnailPath := filepath.Join(thumbsDir, newFilename)
 
 	// Save file
 	src, err := file.Open()
@@ -226,19 +265,44 @@ func (h *Handler) BlogUploadImage(c echo.Context) error {
 	}
 	defer src.Close()
 
-	dst, err := os.Create(filePath)
+	dst, err := os.Create(originalPath)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 	defer dst.Close()
 
 	if _, err = io.Copy(dst, src); err != nil {
+		os.Remove(originalPath)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "حدث خطأ"})
 	}
 
-	// Return the URL
-	imageURL := "/" + filePath
-	return c.JSON(http.StatusOK, map[string]string{
-		"url": imageURL,
+	// Create thumbnail (optional)
+	createThumbnail(originalPath, thumbnailPath)
+
+	// If note_id provided, save to blog_images table
+	if noteIDStr != "" {
+		noteID, err := uuid.Parse(noteIDStr)
+		if err == nil {
+			_, dbErr := h.DB.SaveBlogImage(
+				c.Request().Context(),
+				userID,
+				noteID,
+				"/"+originalPath,
+				"/"+thumbnailPath,
+				file.Filename,
+				mimeType,
+				int(file.Size),
+				positionMarker,
+			)
+			if dbErr != nil {
+				fmt.Printf("Warning: Failed to save blog image record: %v\n", dbErr)
+			}
+		}
+	}
+
+	// Return the position marker (and URL for backward compatibility)
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"url":             "/" + originalPath,
+		"position_marker": positionMarker,
 	})
 }

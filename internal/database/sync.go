@@ -23,6 +23,7 @@ type SyncAllData struct {
 	WorkoutLogs       []WorkoutLog       `json:"workoutLogs"`
 	MarkdownNotes     []MarkdownNote     `json:"markdownNotes"`
 	DailyImages       []DailyImage       `json:"dailyImages"`
+	BlogImages        []BlogImage        `json:"blogImages"`
 	UserSettings      *UserSettings      `json:"userSettings,omitempty"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
@@ -41,6 +42,7 @@ type SyncChangesData struct {
 	WorkoutLogs       []WorkoutLog       `json:"workoutLogs,omitempty"`
 	MarkdownNotes     []MarkdownNote     `json:"markdownNotes,omitempty"`
 	DailyImages       []DailyImage       `json:"dailyImages,omitempty"`
+	BlogImages        []BlogImage        `json:"blogImages,omitempty"`
 	UserSettings      *UserSettings      `json:"userSettings,omitempty"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
@@ -152,6 +154,13 @@ func (db *DB) GetAllSyncData(ctx context.Context, userID uuid.UUID) (*SyncAllDat
 		return nil, err
 	}
 	data.DailyImages = dailyImages
+
+	// Get blog images
+	blogImages, err := db.GetAllBlogImages(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data.BlogImages = blogImages
 
 	// Get user settings
 	userSettings, err := db.GetUserSettings(ctx, userID)
@@ -275,6 +284,15 @@ func (db *DB) GetSyncChangesSince(ctx context.Context, userID uuid.UUID, since t
 	}
 	if len(dailyImages) > 0 {
 		data.DailyImages = dailyImages
+	}
+
+	// Get blog images updated since timestamp
+	blogImages, err := db.GetBlogImagesUpdatedSince(ctx, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	if len(blogImages) > 0 {
+		data.BlogImages = blogImages
 	}
 
 	// Get user settings if updated since timestamp

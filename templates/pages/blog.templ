@@ -1375,7 +1375,11 @@ func initBlogEditor(post *database.MarkdownNote) string {
 			this.saveStatus = 'جاري رفع الصورة...';
 
 			const formData = new FormData();
-			formData.append('image', file);
+			formData.append("image", file);
+			// Include note_id for blog_images table
+			if (this.postId) {
+				formData.append("note_id", this.postId);
+			}
 
 			try {
 				const response = await fetch('/blog/upload-image', {
@@ -1385,7 +1389,7 @@ func initBlogEditor(post *database.MarkdownNote) string {
 
 				if (response.ok) {
 					const data = await response.json();
-					const imageMarkdown = '\n![صورة](' + data.url + ')\n';
+					const imageMarkdown = '\n![](' + data.position_marker + ')\n';
 
 					const textarea = this.$refs.editor;
 					const start = textarea.selectionStart;

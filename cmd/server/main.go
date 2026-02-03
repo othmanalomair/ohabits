@@ -178,6 +178,10 @@ func main() {
 	protected.POST("/api/images", h.UploadImages)
 	protected.DELETE("/api/images/:id", h.DeleteImage)
 
+	// Blog images API
+	protected.POST("/api/blog/images", h.UploadBlogImageAPI)
+	protected.DELETE("/api/blog/images/:id", h.DeleteBlogImageAPI)
+
 	// Start server
 	go func() {
 		addr := ":" + cfg.Port

@@ -357,3 +357,19 @@ type SectionConfig struct {
 	IsVisible bool   `json:"is_visible"`
 	Order     int    `json:"order"`
 }
+
+// BlogImage represents an image in a markdown note (blog post)
+type BlogImage struct {
+	ID             uuid.UUID  `json:"id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	MarkdownNoteID uuid.UUID  `json:"markdown_note_id"`
+	OriginalPath   string     `json:"original_path"`
+	ThumbnailPath  *string    `json:"thumbnail_path,omitempty"`
+	Filename       string     `json:"filename"`
+	MimeType       string     `json:"mime_type"`
+	SizeBytes      int        `json:"size_bytes"`
+	PositionMarker string     `json:"position_marker"`
+	IsDeleted      bool       `json:"is_deleted"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
