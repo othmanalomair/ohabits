@@ -13,7 +13,6 @@ import (
 	"ohabits/internal/database"
 	"ohabits/internal/handlers"
 	"ohabits/internal/middleware"
-	"ohabits/internal/services/ai"
 
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
@@ -35,16 +34,15 @@ func main() {
 	// Create auth middleware
 	auth := middleware.NewAuthMiddleware(cfg.JWTSecret)
 
-	// Create AI service
-	aiService := ai.New(cfg.OllamaURL, cfg.AIModel)
-	if aiService.IsAvailable() {
-		log.Println("✅ خدمة AI متاحة (Ollama)")
-	} else {
-		log.Println("⚠️  خدمة AI غير متاحة - تأكد من تشغيل Ollama")
-	}
+	// Create handlers (AIService is created inside)
+	h := handlers.New(db, cfg, auth)
 
-	// Create handlers
-	h := handlers.New(db, cfg, auth, aiService)
+	// Log AI service status
+	if h.AIService.IsConfigured() {
+		log.Println("✅ خدمة AI متاحة (OpenRouter)")
+	} else {
+		log.Println("⚠️  خدمة AI غير متاحة - تأكد من تعيين OPENROUTER_API_KEY")
+	}
 
 	// Create Echo instance
 	e := echo.New()
@@ -147,21 +145,17 @@ func main() {
 	protected.DELETE("/blog/:id", h.BlogDelete)
 	protected.POST("/blog/upload-image", h.BlogUploadImage)
 
+	// AI API endpoints (OpenRouter - for blog assistant)
+	aiHandler := handlers.NewAIHandler(h.AIService)
+	protected.POST("/api/ai/suggest-titles", aiHandler.SuggestTitles)
+	protected.POST("/api/ai/format-markdown", aiHandler.FormatMarkdown)
+	protected.POST("/api/ai/custom-prompt", aiHandler.CustomPrompt)
+
 	// Calendar Events (الرزنامة)
 	protected.GET("/calendar", h.CalendarPage)
 	protected.POST("/calendar", h.CreateCalendarEvent)
 	protected.PUT("/calendar/:id", h.UpdateCalendarEvent)
 	protected.DELETE("/calendar/:id", h.DeleteCalendarEvent)
-
-	// AI (الذكاء الاصطناعي)
-	protected.GET("/api/ai/status", h.AIStatus)
-	protected.POST("/api/ai/fix-text", h.AIFixText)
-	protected.POST("/api/ai/generate-title", h.AIGenerateTitles)
-	protected.POST("/api/ai/monthly-summary", h.AIGenerateMonthlySummary)
-
-	// Monthly Summary (ملخص الشهر)
-	protected.GET("/api/monthly-summary", h.GetMonthlySummary)
-	protected.POST("/api/monthly-summary/save", h.SaveMonthlySummary)
 
 	// Sync API (للتطبيق الأصلي iOS/macOS)
 	protected.GET("/api/sync/all", h.SyncAll)

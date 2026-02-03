@@ -10,12 +10,14 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	JWTSecret   string
-	Port        string
-	Env         string
-	OllamaURL   string
-	AIModel     string
+	DatabaseURL       string
+	JWTSecret         string
+	Port              string
+	Env               string
+	OllamaURL         string
+	AIModel           string
+	OpenRouterAPIKey  string
+	OpenRouterModel   string
 }
 
 func Load() *Config {
@@ -40,12 +42,14 @@ func Load() *Config {
 	}
 
 	return &Config{
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5432/ohabits?sslmode=disable"),
-		JWTSecret:   jwtSecret,
-		Port:        getEnv("PORT", "8080"),
-		Env:         env,
-		OllamaURL:   getEnv("OLLAMA_URL", "http://localhost:11434"),
-		AIModel:     getEnv("AI_MODEL", "ministral-3:8b"),
+		DatabaseURL:      getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5432/ohabits?sslmode=disable"),
+		JWTSecret:        jwtSecret,
+		Port:             getEnv("PORT", "8080"),
+		Env:              env,
+		OllamaURL:        getEnv("OLLAMA_URL", "http://localhost:11434"),
+		AIModel:          getEnv("AI_MODEL", "ministral-3:8b"),
+		OpenRouterAPIKey: getEnv("OPENROUTER_API_KEY", ""),
+		OpenRouterModel:  getEnv("OPENROUTER_MODEL", "x-ai/grok-4.1-fast"),
 	}
 }
 
