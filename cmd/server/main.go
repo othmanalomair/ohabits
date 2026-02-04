@@ -172,7 +172,7 @@ func main() {
 	// User API (للتطبيق الأصلي)
 	protected.GET("/api/user/info", h.UserInfo)
 	protected.GET("/api/auth/validate", h.ValidateToken)
-	protected.POST("/api/auth/refresh", h.RefreshToken)
+	e.POST("/api/auth/refresh", h.RefreshToken)
 
 	// Images API (للتطبيق الأصلي)
 	protected.POST("/api/images", h.UploadImages)

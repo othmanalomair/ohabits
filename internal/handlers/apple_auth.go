@@ -32,6 +32,7 @@ type AppleSignInResponse struct {
 	Email     string `json:"email"`
 	FullName  string `json:"fullName"`
 	IsNewUser bool   `json:"isNewUser"`
+	Role      int    `json:"role"`
 }
 
 // AppleIDTokenClaims represents the claims in Apple's identity token
@@ -184,6 +185,7 @@ func (h *Handler) AppleSignIn(c echo.Context) error {
 		Email:     user.Email,
 		FullName:  user.DisplayName,
 		IsNewUser: isNewUser,
+		Role:      user.Role,
 	})
 }
 

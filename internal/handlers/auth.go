@@ -112,6 +112,7 @@ func (h *Handler) APILogin(c echo.Context) error {
 			"id":       user.ID,
 			"email":    user.Email,
 			"fullName": user.DisplayName,
+			"role":     user.Role,
 		},
 		"isNewUser": false,
 	})

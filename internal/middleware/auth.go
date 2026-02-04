@@ -32,7 +32,7 @@ func (m *AuthMiddleware) GenerateToken(userID uuid.UUID, email string) (string, 
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)), // 7 days
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour)), // 30 days
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -139,7 +139,7 @@ func SetAuthCookie(c echo.Context, token string) {
 		Name:     "token",
 		Value:    token,
 		Path:     "/",
-		MaxAge:   7 * 24 * 60 * 60, // 7 days
+		MaxAge:   30 * 24 * 60 * 60, // 30 days
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
@@ -155,4 +155,23 @@ func ClearAuthCookie(c echo.Context) {
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
+}
+
+// ValidateTokenIgnoreExpiry validates a JWT token signature but allows expired tokens.
+// Used for token refresh - we still verify the token was issued by us.
+func (m *AuthMiddleware) ValidateTokenIgnoreExpiry(tokenString string) (*JWTClaims, error) {
+	parser := jwt.NewParser(jwt.WithLeeway(365 * 24 * time.Hour))
+	token, err := parser.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return m.Secret, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*JWTClaims); ok {
+		return claims, nil
+	}
+
+	return nil, jwt.ErrSignatureInvalid
 }

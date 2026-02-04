@@ -253,6 +253,7 @@ type ProfileUser struct {
 	Email           string  `json:"email"`
 	FullName        string  `json:"full_name"`
 	ProfileImageUrl *string `json:"profile_image_url"`
+	Role            int     `json:"role"`
 }
 
 // ProfileImageAPIResponse represents the response for profile image upload
@@ -288,6 +289,7 @@ func (h *Handler) GetProfileAPI(c echo.Context) error {
 			Email:           user.Email,
 			FullName:        user.DisplayName,
 			ProfileImageUrl: user.AvatarURL,
+			Role:            user.Role,
 		},
 	})
 }
@@ -352,6 +354,7 @@ func (h *Handler) UpdateProfileAPI(c echo.Context) error {
 			Email:           user.Email,
 			FullName:        user.DisplayName,
 			ProfileImageUrl: user.AvatarURL,
+			Role:            user.Role,
 		},
 	})
 }

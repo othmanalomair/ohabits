@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"ohabits/internal/database"
@@ -294,19 +295,31 @@ func (h *Handler) ValidateToken(c echo.Context) error {
 }
 
 // RefreshToken generates a new JWT token for the current user
-// POST /api/auth/refresh
+// POST /api/auth/refresh - Public endpoint, accepts expired tokens
 func (h *Handler) RefreshToken(c echo.Context) error {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
+	// Extract token from Authorization header (no middleware, so we do it manually)
+	auth := c.Request().Header.Get("Authorization")
+	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 			"status": "error",
-			"error":  "Unauthorized",
+			"error":  "Token required",
+		})
+	}
+	tokenString := strings.TrimPrefix(auth, "Bearer ")
+
+	// Validate token signature but allow expired tokens
+	claims, err := h.Auth.ValidateTokenIgnoreExpiry(tokenString)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"status": "error",
+			"error":  "Invalid token",
 		})
 	}
 
 	ctx := c.Request().Context()
 
-	user, err := h.DB.GetUserByID(ctx, userID)
+	// Check if user still exists in database
+	user, err := h.DB.GetUserByID(ctx, claims.UserID)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 			"status": "error",
@@ -330,6 +343,7 @@ func (h *Handler) RefreshToken(c echo.Context) error {
 			"id":          user.ID.String(),
 			"email":       user.Email,
 			"displayName": user.DisplayName,
+			"role":        user.Role,
 		},
 	})
 }
