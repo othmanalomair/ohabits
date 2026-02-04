@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"strings"
@@ -43,8 +44,8 @@ type AppleIDTokenClaims struct {
 	IssuedAt        int64  `json:"iat"`
 	Subject         string `json:"sub"` // Apple's unique user ID
 	Email           string `json:"email"`
-	EmailVerified   string `json:"email_verified"`
-	IsPrivateEmail  string `json:"is_private_email"`
+	EmailVerified   interface{} `json:"email_verified"`
+	IsPrivateEmail  interface{} `json:"is_private_email"`
 	RealUserStatus  int    `json:"real_user_status"`
 	TransferSub     string `json:"transfer_sub"`
 	NonceSupported  bool   `json:"nonce_supported"`
@@ -92,6 +93,7 @@ func (h *Handler) AppleSignIn(c echo.Context) error {
 	// Verify Apple's identity token
 	claims, err := verifyAppleIdentityToken(req.IdentityToken)
 	if err != nil {
+		log.Printf("Apple Sign-In token verification failed: %v", err)
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": fmt.Sprintf("Invalid identity token: %v", err),
 		})
@@ -179,13 +181,15 @@ func (h *Handler) AppleSignIn(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, AppleSignInResponse{
-		Token:     token,
-		UserID:    user.ID.String(),
-		Email:     user.Email,
-		FullName:  user.DisplayName,
-		IsNewUser: isNewUser,
-		Role:      user.Role,
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"token": token,
+		"user": map[string]interface{}{
+			"id":       user.ID,
+			"email":    user.Email,
+			"fullName": user.DisplayName,
+			"role":     user.Role,
+		},
+		"isNewUser": isNewUser,
 	})
 }
 
@@ -246,6 +250,11 @@ func verifyAppleIdentityToken(tokenString string) (*AppleIDTokenClaims, error) {
 	// Verify issuer
 	if claims.Issuer != "https://appleid.apple.com" {
 		return nil, errors.New("invalid issuer")
+	}
+
+	// Verify audience (bundle ID)
+	if claims.Audience != "com.most3mr.ohabits" {
+		return nil, fmt.Errorf("invalid audience: got %s", claims.Audience)
 	}
 
 	// Verify expiration

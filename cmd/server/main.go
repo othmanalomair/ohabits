@@ -32,7 +32,7 @@ func main() {
 	log.Println("✅ تم الاتصال بقاعدة البيانات")
 
 	// Create auth middleware
-	auth := middleware.NewAuthMiddleware(cfg.JWTSecret)
+	auth := middleware.NewAuthMiddleware(cfg.JWTSecret, db)
 
 	// Create handlers (AIService is created inside)
 	h := handlers.New(db, cfg, auth)

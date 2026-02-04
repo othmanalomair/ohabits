@@ -1,9 +1,12 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
+
+	"ohabits/internal/database"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -18,12 +21,17 @@ type JWTClaims struct {
 
 type AuthMiddleware struct {
 	Secret []byte
+	DB     *database.DB
 }
 
-func NewAuthMiddleware(secret string) *AuthMiddleware {
-	return &AuthMiddleware{
+func NewAuthMiddleware(secret string, db ...*database.DB) *AuthMiddleware {
+	m := &AuthMiddleware{
 		Secret: []byte(secret),
 	}
+	if len(db) > 0 {
+		m.DB = db[0]
+	}
+	return m
 }
 
 // GenerateToken creates a new JWT token for a user
@@ -98,6 +106,25 @@ func (m *AuthMiddleware) RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
 				return c.Redirect(http.StatusSeeOther, "/login")
 			}
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "جلسة منتهية"})
+		}
+
+		// Verify user still exists in database
+		if m.DB != nil {
+			_, err := m.DB.GetUserByID(context.Background(), claims.UserID)
+			if err != nil {
+				// User no longer exists — treat as session expired
+				if strings.Contains(c.Request().Header.Get("Accept"), "text/html") {
+					c.SetCookie(&http.Cookie{
+						Name:     "token",
+						Value:    "",
+						Path:     "/",
+						MaxAge:   -1,
+						HttpOnly: true,
+					})
+					return c.Redirect(http.StatusSeeOther, "/login")
+				}
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "الحساب غير موجود"})
+			}
 		}
 
 		// Store user info in context
