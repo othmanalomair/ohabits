@@ -518,3 +518,60 @@ func (h *Handler) DeleteProfileImageAPI(c echo.Context) error {
 		Status: "success",
 	})
 }
+
+// DeleteAccountAPIResponse represents the response for account deletion
+type DeleteAccountAPIResponse struct {
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+// DeleteAccountAPI permanently deletes the user's account and all data
+// DELETE /api/user/account
+func (h *Handler) DeleteAccountAPI(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, DeleteAccountAPIResponse{
+			Status: "error",
+			Error:  "Unauthorized",
+		})
+	}
+
+	// Get user to clean up uploaded files
+	user, err := h.DB.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, DeleteAccountAPIResponse{
+			Status: "error",
+			Error:  "User not found",
+		})
+	}
+
+	// Delete user avatar file if exists
+	if user.GetAvatarURL() != "" {
+		oldPath := strings.TrimPrefix(user.GetAvatarURL(), "/")
+		cleanPath := filepath.Clean(oldPath)
+		if strings.HasPrefix(cleanPath, "uploads/") && !strings.Contains(cleanPath, "..") {
+			os.Remove(cleanPath)
+		}
+	}
+
+	// Delete user's uploaded images directory
+	userUploadsDir := filepath.Join(uploadsDir, userID.String())
+	if _, err := os.Stat(userUploadsDir); err == nil {
+		os.RemoveAll(userUploadsDir)
+	}
+
+	// Delete user from database (cascades to all related data)
+	if err := h.DB.DeleteUser(c.Request().Context(), userID); err != nil {
+		log.Printf("Error deleting user account %s: %v", userID, err)
+		return c.JSON(http.StatusInternalServerError, DeleteAccountAPIResponse{
+			Status: "error",
+			Error:  "Failed to delete account",
+		})
+	}
+
+	log.Printf("User account deleted: %s", userID)
+
+	return c.JSON(http.StatusOK, DeleteAccountAPIResponse{
+		Status: "success",
+	})
+}

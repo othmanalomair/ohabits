@@ -25,6 +25,10 @@ type SyncAllData struct {
 	DailyImages       []DailyImage       `json:"dailyImages"`
 	BlogImages        []BlogImage        `json:"blogImages"`
 	UserSettings      *UserSettings      `json:"userSettings,omitempty"`
+	Projects          []Project          `json:"projects"`
+	Tasks             []Task             `json:"tasks"`
+	TaskComments      []TaskComment      `json:"taskComments"`
+	TaskAttachments   []TaskAttachment   `json:"taskAttachments"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
 
@@ -44,6 +48,10 @@ type SyncChangesData struct {
 	DailyImages       []DailyImage       `json:"dailyImages,omitempty"`
 	BlogImages        []BlogImage        `json:"blogImages,omitempty"`
 	UserSettings      *UserSettings      `json:"userSettings,omitempty"`
+	Projects          []Project          `json:"projects"`
+	Tasks             []Task             `json:"tasks"`
+	TaskComments      []TaskComment      `json:"taskComments"`
+	TaskAttachments   []TaskAttachment   `json:"taskAttachments"`
 	LastSyncTimestamp time.Time          `json:"lastSyncTimestamp"`
 }
 
@@ -169,6 +177,34 @@ func (db *DB) GetAllSyncData(ctx context.Context, userID uuid.UUID) (*SyncAllDat
 	}
 	data.UserSettings = userSettings
 
+
+	// Get projects
+	projects, err := db.GetProjectsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data.Projects = projects
+
+	// Get tasks
+	tasks, err := db.GetAllTasksByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data.Tasks = tasks
+
+	// Get task comments
+	taskComments, err := db.GetAllCommentsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data.TaskComments = taskComments
+
+	// Get task attachments
+	taskAttachments, err := db.GetAllAttachmentsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data.TaskAttachments = taskAttachments
 	return data, nil
 }
 
@@ -304,6 +340,42 @@ func (db *DB) GetSyncChangesSince(ctx context.Context, userID uuid.UUID, since t
 		data.UserSettings = userSettings
 	}
 
+
+	// Get projects updated since timestamp
+	projectsChanged, err := db.getProjectsUpdatedSince(ctx, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	if len(projectsChanged) > 0 {
+		data.Projects = projectsChanged
+	}
+
+	// Get tasks updated since timestamp
+	tasksChanged, err := db.getTasksUpdatedSince(ctx, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	if len(tasksChanged) > 0 {
+		data.Tasks = tasksChanged
+	}
+
+	// Get task comments updated since timestamp
+	commentsChanged, err := db.getCommentsUpdatedSince(ctx, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	if len(commentsChanged) > 0 {
+		data.TaskComments = commentsChanged
+	}
+
+	// Get task attachments created since timestamp
+	attachmentsChanged, err := db.getAttachmentsCreatedSince(ctx, userID, since)
+	if err != nil {
+		return nil, err
+	}
+	if len(attachmentsChanged) > 0 {
+		data.TaskAttachments = attachmentsChanged
+	}
 	return data, nil
 }
 
@@ -1175,4 +1247,152 @@ func (db *DB) getDailyImagesCreatedSince(ctx context.Context, userID uuid.UUID, 
 	}
 
 	return images, rows.Err()
+}
+
+// ========== PROJECT SYNC FUNCTIONS ==========
+
+// SyncPushProject handles syncing a project from the client
+func (db *DB) SyncPushProject(ctx context.Context, userID uuid.UUID, serverID *string, isDeleted bool, data json.RawMessage) (string, error) {
+	if isDeleted {
+		if serverID == nil {
+			return "", nil
+		}
+		id, err := uuid.Parse(*serverID)
+		if err != nil {
+			return "", err
+		}
+		return *serverID, db.SoftDeleteProject(ctx, id)
+	}
+
+	var projectData struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Status      string `json:"status"`
+	}
+	if err := json.Unmarshal(data, &projectData); err != nil {
+		return "", err
+	}
+
+	if projectData.Status == "" {
+		projectData.Status = "active"
+	}
+
+	if serverID != nil {
+		id, err := uuid.Parse(*serverID)
+		if err != nil {
+			return "", err
+		}
+		return *serverID, db.UpdateProject(ctx, id, projectData.Name, projectData.Description, projectData.Status)
+	}
+
+	project, err := db.CreateProject(ctx, userID, projectData.Name, projectData.Description, projectData.Status)
+	if err != nil {
+		return "", err
+	}
+	return project.ID.String(), nil
+}
+
+// SyncPushTask handles syncing a task from the client
+func (db *DB) SyncPushTask(ctx context.Context, userID uuid.UUID, serverID *string, isDeleted bool, data json.RawMessage) (string, error) {
+	if isDeleted {
+		if serverID == nil {
+			return "", nil
+		}
+		id, err := uuid.Parse(*serverID)
+		if err != nil {
+			return "", err
+		}
+		return *serverID, db.SoftDeleteTask(ctx, id)
+	}
+
+	var taskData struct {
+		ProjectID    string  `json:"project_id"`
+		ParentTaskID *string `json:"parent_task_id"`
+		Title        string  `json:"title"`
+		Description  string  `json:"description"`
+		Status       string  `json:"status"`
+		Priority     string  `json:"priority"`
+		DueDate      *string `json:"due_date"`
+		DisplayOrder int     `json:"display_order"`
+		Collapsed    bool    `json:"collapsed"`
+	}
+	if err := json.Unmarshal(data, &taskData); err != nil {
+		return "", fmt.Errorf("failed to unmarshal task data: %w", err)
+	}
+
+	if taskData.Status == "" {
+		taskData.Status = "Not Started"
+	}
+	if taskData.Priority == "" {
+		taskData.Priority = "None"
+	}
+
+	projectID, err := uuid.Parse(taskData.ProjectID)
+	if err != nil {
+		return "", fmt.Errorf("invalid project_id: %w", err)
+	}
+
+	var parentTaskID *uuid.UUID
+	if taskData.ParentTaskID != nil && *taskData.ParentTaskID != "" {
+		pid, err := uuid.Parse(*taskData.ParentTaskID)
+		if err != nil {
+			return "", fmt.Errorf("invalid parent_task_id: %w", err)
+		}
+		parentTaskID = &pid
+	}
+
+	if serverID != nil {
+		id, err := uuid.Parse(*serverID)
+		if err != nil {
+			return "", err
+		}
+		return *serverID, db.UpdateTask(ctx, id, taskData.Title, taskData.Description, taskData.Status, taskData.Priority, nil, taskData.DisplayOrder, taskData.Collapsed)
+	}
+
+	task, err := db.CreateTask(ctx, userID, projectID, parentTaskID, taskData.Title, taskData.Description, taskData.Status, taskData.Priority, nil, taskData.DisplayOrder)
+	if err != nil {
+		return "", err
+	}
+	return task.ID.String(), nil
+}
+
+// SyncPushTaskComment handles syncing a task comment from the client
+func (db *DB) SyncPushTaskComment(ctx context.Context, userID uuid.UUID, serverID *string, isDeleted bool, data json.RawMessage) (string, error) {
+	if isDeleted {
+		if serverID == nil {
+			return "", nil
+		}
+		id, err := uuid.Parse(*serverID)
+		if err != nil {
+			return "", err
+		}
+		return *serverID, db.SoftDeleteTaskComment(ctx, id)
+	}
+
+	var commentData struct {
+		TaskID  string `json:"task_id"`
+		Comment string `json:"comment"`
+	}
+	if err := json.Unmarshal(data, &commentData); err != nil {
+		return "", err
+	}
+
+	taskID, err := uuid.Parse(commentData.TaskID)
+	if err != nil {
+		return "", fmt.Errorf("invalid task_id: %w", err)
+	}
+
+	if serverID != nil {
+		id, err := uuid.Parse(*serverID)
+		if err != nil {
+			return "", err
+		}
+		return *serverID, db.UpdateTaskComment(ctx, id, commentData.Comment)
+	}
+
+	comment, err := db.CreateTaskComment(ctx, taskID, userID, commentData.Comment)
+	if err != nil {
+		return "", err
+	}
+	return comment.ID.String(), nil
 }

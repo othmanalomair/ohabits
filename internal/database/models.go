@@ -252,6 +252,7 @@ type Episode struct {
 
 // Project represents a project
 type Project struct {
+	IsDeleted   bool      `json:"is_deleted"`
 	ID          uuid.UUID `json:"id"`
 	UserID      uuid.UUID `json:"user_id"`
 	Name        string    `json:"name"`
@@ -275,6 +276,9 @@ type Task struct {
 	DisplayOrder int        `json:"display_order"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+	IsDeleted    bool       `json:"is_deleted"`
+	Collapsed    bool       `json:"collapsed"`
+	Completed    bool       `json:"completed"`
 }
 
 // CalendarEvent represents a calendar event (birthday, travel, holiday, anniversary, general)
@@ -373,4 +377,28 @@ type BlogImage struct {
 	IsDeleted      bool       `json:"is_deleted"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+// TaskComment represents a comment on a task
+type TaskComment struct {
+	ID        uuid.UUID `json:"id"`
+	TaskID    uuid.UUID `json:"task_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Comment   string    `json:"comment"`
+	IsDeleted bool      `json:"is_deleted"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// TaskAttachment represents a file attachment on a task
+type TaskAttachment struct {
+	ID        uuid.UUID `json:"id"`
+	TaskID    uuid.UUID `json:"task_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Filename  string    `json:"filename"`
+	FilePath  string    `json:"file_path"`
+	FileSize  int64     `json:"file_size"`
+	MimeType  string    `json:"mime_type"`
+	IsDeleted bool      `json:"is_deleted"`
+	CreatedAt time.Time `json:"created_at"`
 }

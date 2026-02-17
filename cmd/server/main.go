@@ -85,12 +85,20 @@ func main() {
 	e.POST("/api/auth/apple", h.AppleSignIn)
 	e.POST("/api/auth/login", h.APILogin)
 
+	// Landing page or Dashboard (public with optional auth)
+	e.GET("/", h.LandingOrDashboard, auth.OptionalAuth)
+
+	// Public pages
+	e.GET("/privacy", h.PrivacyPage)
+	e.GET("/terms", h.TermsPage)
+	e.GET("/support", h.SupportPage)
+
 	// Protected routes
 	protected := e.Group("")
 	protected.Use(auth.RequireAuth)
 
 	// Dashboard
-	protected.GET("/", h.Dashboard)
+	// Dashboard moved to public route with OptionalAuth
 
 	// Habits
 	protected.GET("/habits", h.HabitsPage)
@@ -168,6 +176,7 @@ func main() {
 	protected.PUT("/api/user/profile", h.UpdateProfileAPI)
 	protected.POST("/api/user/profile/image", h.UploadProfileImageAPI)
 	protected.DELETE("/api/user/profile/image", h.DeleteProfileImageAPI)
+	protected.DELETE("/api/user/account", h.DeleteAccountAPI)
 
 	// User API (للتطبيق الأصلي)
 	protected.GET("/api/user/info", h.UserInfo)
@@ -181,6 +190,28 @@ func main() {
 	// Blog images API
 	protected.POST("/api/blog/images", h.UploadBlogImageAPI)
 	protected.DELETE("/api/blog/images/:id", h.DeleteBlogImageAPI)
+
+	// Projects API (للتطبيق الأصلي)
+	protected.GET("/api/projects", h.GetProjects)
+	protected.GET("/api/projects/:id", h.GetProject)
+	protected.POST("/api/projects", h.CreateProjectAPI)
+	protected.PUT("/api/projects/:id", h.UpdateProjectAPI)
+	protected.DELETE("/api/projects/:id", h.DeleteProjectAPI)
+
+	// Tasks API
+	protected.GET("/api/projects/:id/tasks", h.GetTasks)
+	protected.POST("/api/projects/:id/tasks", h.CreateTaskAPI)
+	protected.PUT("/api/tasks/:id", h.UpdateTaskAPI)
+	protected.DELETE("/api/tasks/:id", h.DeleteTaskAPI)
+
+	// Task Comments API
+	protected.GET("/api/tasks/:id/comments", h.GetTaskComments)
+	protected.POST("/api/tasks/:id/comments", h.CreateTaskCommentAPI)
+	protected.DELETE("/api/comments/:id", h.DeleteTaskCommentAPI)
+
+	// Task Attachments API
+	protected.POST("/api/tasks/:id/attachments", h.UploadTaskAttachment)
+	protected.DELETE("/api/attachments/:id", h.DeleteTaskAttachmentAPI)
 
 	// Admin routes
 	admin := e.Group("/admin")
