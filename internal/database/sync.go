@@ -208,11 +208,12 @@ func (db *DB) GetAllSyncData(ctx context.Context, userID uuid.UUID) (*SyncAllDat
 	return data, nil
 }
 
-// GetSyncChangesSince retrieves all data changed since the given timestamp
+// GetSyncChangesSince retrieves all data changed since the given timestamp.
+// LastSyncTimestamp is captured AFTER all queries run so it is always >= the
+// max updated_at of any returned row. This prevents the client from re-fetching
+// rows that were modified mid-request on the next /sync/changes call.
 func (db *DB) GetSyncChangesSince(ctx context.Context, userID uuid.UUID, since time.Time) (*SyncChangesData, error) {
-	data := &SyncChangesData{
-		LastSyncTimestamp: time.Now(),
-	}
+	data := &SyncChangesData{}
 
 	// Get habits updated since timestamp
 	habits, err := db.getHabitsUpdatedSince(ctx, userID, since)
@@ -376,6 +377,8 @@ func (db *DB) GetSyncChangesSince(ctx context.Context, userID uuid.UUID, since t
 	if len(attachmentsChanged) > 0 {
 		data.TaskAttachments = attachmentsChanged
 	}
+	// Capture timestamp AFTER queries so LastSyncTimestamp >= any row's updated_at.
+	data.LastSyncTimestamp = time.Now()
 	return data, nil
 }
 
@@ -498,7 +501,7 @@ func (db *DB) getAllTodos(ctx context.Context, userID uuid.UUID) ([]Todo, error)
 
 func (db *DB) getAllWorkoutLogs(ctx context.Context, userID uuid.UUID) ([]WorkoutLog, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day
+		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day, is_deleted
 		FROM workout_logs WHERE user_id = $1
 		ORDER BY date DESC
 	`, userID)
@@ -513,7 +516,7 @@ func (db *DB) getAllWorkoutLogs(ctx context.Context, userID uuid.UUID) ([]Workou
 		var exercisesJSON, cardioJSON []byte
 		if err := rows.Scan(
 			&wl.ID, &wl.UserID, &wl.WorkoutName, &exercisesJSON, &cardioJSON,
-			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay,
+			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay, &wl.IsDeleted,
 		); err != nil {
 			return nil, err
 		}
@@ -761,7 +764,7 @@ func (db *DB) getWorkoutsUpdatedSince(ctx context.Context, userID uuid.UUID, sin
 
 func (db *DB) getWorkoutLogsUpdatedSince(ctx context.Context, userID uuid.UUID, since time.Time) ([]WorkoutLog, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day
+		SELECT id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day, is_deleted
 		FROM workout_logs WHERE user_id = $1 AND updated_at > $2
 		ORDER BY date DESC
 	`, userID, since)
@@ -776,7 +779,7 @@ func (db *DB) getWorkoutLogsUpdatedSince(ctx context.Context, userID uuid.UUID, 
 		var exercisesJSON, cardioJSON []byte
 		if err := rows.Scan(
 			&wl.ID, &wl.UserID, &wl.WorkoutName, &exercisesJSON, &cardioJSON,
-			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay,
+			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay, &wl.IsDeleted,
 		); err != nil {
 			return nil, err
 		}
@@ -1067,7 +1070,10 @@ func (db *DB) SyncPushWorkout(ctx context.Context, userID uuid.UUID, serverID *s
 	return workout.ID.String(), nil
 }
 
-// SyncPushWorkoutLog handles syncing a workout log from the client
+// SyncPushWorkoutLog handles syncing a workout log from the client.
+// When isDeleted=true, soft-deletes the log by date so the client's "change
+// workout" action is durable; otherwise upserts by date and clears is_deleted
+// (re-logging on the same date reanimates the row).
 func (db *DB) SyncPushWorkoutLog(ctx context.Context, userID uuid.UUID, serverID *string, isDeleted bool, data json.RawMessage) (string, error) {
 	var logData struct {
 		WorkoutName string     `json:"workout_name"`
@@ -1081,7 +1087,33 @@ func (db *DB) SyncPushWorkoutLog(ctx context.Context, userID uuid.UUID, serverID
 		return "", err
 	}
 
-	// Workout logs use upsert based on date
+	if isDeleted {
+		// Soft-delete. If serverID provided, delete by ID; else by (user, date).
+		var returnedID string
+		if serverID != nil {
+			if id, perr := uuid.Parse(*serverID); perr == nil {
+				if derr := db.Pool.QueryRow(ctx, `
+					UPDATE workout_logs SET is_deleted = true, updated_at = now()
+					WHERE id = $1 AND user_id = $2
+					RETURNING id
+				`, id, userID).Scan(&id); derr == nil {
+					return id.String(), nil
+				}
+			}
+		}
+		var id uuid.UUID
+		dateStr := logData.Date.Format("2006-01-02")
+		if err := db.Pool.QueryRow(ctx, `
+			UPDATE workout_logs SET is_deleted = true, updated_at = now()
+			WHERE user_id = $1 AND date = $2
+			RETURNING id
+		`, userID, dateStr).Scan(&id); err == nil {
+			returnedID = id.String()
+		}
+		return returnedID, nil
+	}
+
+	// Upsert by (user, date). Reset is_deleted so a re-logged workout reappears.
 	log, err := db.SaveWorkoutLogWithRestDay(ctx, userID, logData.WorkoutName, logData.Exercises, logData.Cardio, logData.Weight, logData.Date, logData.IsRestDay)
 	if err != nil {
 		return "", err

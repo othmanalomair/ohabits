@@ -197,6 +197,14 @@ func (h *Handler) SyncChanges(c echo.Context) error {
 		req.Since = time.Unix(0, 0)
 	}
 
+	// BUG FIX: updated_at/created_at columns are 'timestamp without time zone' and
+	// Postgres stores now() in session TZ (Asia/Kuwait). pgx sends Go time.Time to
+	// those columns using the *wall-clock components* in the time's Location, so a
+	// UTC 'since' ends up comparing UTC wall-clock to Kuwait-local wall-clock and
+	// items updated within the +3h offset window echo forever. Converting to
+	// time.Local aligns the wall-clocks before the comparison.
+	req.Since = req.Since.In(time.Local)
+
 	ctx := c.Request().Context()
 
 	data, err := h.DB.GetSyncChangesSince(ctx, userID, req.Since)

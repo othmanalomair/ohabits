@@ -7,16 +7,34 @@ import (
 	"github.com/google/uuid"
 )
 
-// SaveDailyImage saves a new image record
-func (db *DB) SaveDailyImage(ctx context.Context, userID uuid.UUID, date time.Time, originalPath, thumbnailPath, filename, mimeType string, sizeBytes int) (*DailyImage, error) {
+// SaveDailyImage saves a new image record. If clientUploadID is non-nil and a row
+// with (user_id, client_upload_id) already exists, it is returned as-is instead of
+// inserting a new row — making uploads idempotent across retries / app kills.
+func (db *DB) SaveDailyImage(ctx context.Context, userID uuid.UUID, date time.Time, originalPath, thumbnailPath, filename, mimeType string, sizeBytes int, clientUploadID *uuid.UUID) (*DailyImage, error) {
 	dateStr := date.Format("2006-01-02")
+
+	// Idempotency check: same user + same client upload UUID => return existing.
+	if clientUploadID != nil {
+		var existing DailyImage
+		err := db.Pool.QueryRow(ctx, `
+			SELECT id, user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, created_at
+			FROM daily_images
+			WHERE user_id = $1 AND client_upload_id = $2 AND deleted_at IS NULL
+		`, userID, *clientUploadID).Scan(
+			&existing.ID, &existing.UserID, &existing.Date, &existing.OriginalPath, &existing.ThumbnailPath,
+			&existing.Filename, &existing.MimeType, &existing.SizeBytes, &existing.CreatedAt,
+		)
+		if err == nil {
+			return &existing, nil
+		}
+	}
 
 	var img DailyImage
 	err := db.Pool.QueryRow(ctx, `
-		INSERT INTO daily_images (user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO daily_images (user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, client_upload_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, user_id, date, original_path, thumbnail_path, filename, mime_type, size_bytes, created_at
-	`, userID, dateStr, originalPath, thumbnailPath, filename, mimeType, sizeBytes).Scan(
+	`, userID, dateStr, originalPath, thumbnailPath, filename, mimeType, sizeBytes, clientUploadID).Scan(
 		&img.ID, &img.UserID, &img.Date, &img.OriginalPath, &img.ThumbnailPath,
 		&img.Filename, &img.MimeType, &img.SizeBytes, &img.CreatedAt,
 	)

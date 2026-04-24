@@ -194,6 +194,7 @@ type WorkoutLog struct {
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 	IsRestDay          bool       `json:"is_rest_day"`
+	IsDeleted          bool       `json:"is_deleted"`
 }
 
 // Cardio represents cardio activity

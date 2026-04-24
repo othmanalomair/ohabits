@@ -145,7 +145,15 @@ func (h *Handler) UploadImages(c echo.Context) error {
 			thumbnailPath = originalPath
 		}
 
-		// Save to database
+		// Parse optional client_upload_id for idempotent retries.
+		var clientUploadID *uuid.UUID
+		if raw := c.FormValue("client_upload_id"); raw != "" {
+			if parsed, err := uuid.Parse(raw); err == nil {
+				clientUploadID = &parsed
+			}
+		}
+
+		// Save to database (idempotent on client_upload_id when provided).
 		img, err := h.DB.SaveDailyImage(
 			c.Request().Context(),
 			userID,
@@ -155,7 +163,13 @@ func (h *Handler) UploadImages(c echo.Context) error {
 			file.Filename,
 			mimeType,
 			int(file.Size),
+			clientUploadID,
 		)
+		if err == nil && clientUploadID != nil && img.OriginalPath != "/"+originalPath {
+			// An existing row was returned — delete the just-written file to avoid orphans.
+			os.Remove(originalPath)
+			os.Remove(thumbnailPath)
+		}
 		if err != nil {
 			log.Printf("DB save error: %v", err)
 			continue

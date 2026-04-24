@@ -204,22 +204,22 @@ func (db *DB) SaveWorkoutLogWithRestDay(ctx context.Context, userID uuid.UUID, w
 		// Update existing
 		err = db.Pool.QueryRow(ctx, `
 			UPDATE workout_logs
-			SET name = $2, completed_exercises = $3, cardio = $4, weight = $5, is_rest_day = $6, updated_at = now()
+			SET name = $2, completed_exercises = $3, cardio = $4, weight = $5, is_rest_day = $6, is_deleted = false, updated_at = now()
 			WHERE id = $1
-			RETURNING id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day
+			RETURNING id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day, is_deleted
 		`, existingID, workoutName, exercisesJSON, cardioJSON, weight, isRestDay).Scan(
 			&wl.ID, &wl.UserID, &wl.WorkoutName, &exercisesBytes, &cardioBytes,
-			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay,
+			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay, &wl.IsDeleted,
 		)
 	} else {
 		// Create new
 		err = db.Pool.QueryRow(ctx, `
 			INSERT INTO workout_logs (user_id, name, completed_exercises, cardio, weight, date, is_rest_day)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
-			RETURNING id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day
+			RETURNING id, user_id, name, completed_exercises, cardio, weight, date, created_at, updated_at, is_rest_day, is_deleted
 		`, userID, workoutName, exercisesJSON, cardioJSON, weight, dateStr, isRestDay).Scan(
 			&wl.ID, &wl.UserID, &wl.WorkoutName, &exercisesBytes, &cardioBytes,
-			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay,
+			&wl.Weight, &wl.Date, &wl.CreatedAt, &wl.UpdatedAt, &wl.IsRestDay, &wl.IsDeleted,
 		)
 	}
 
